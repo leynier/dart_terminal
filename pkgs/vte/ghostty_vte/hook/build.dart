@@ -107,11 +107,7 @@ bool _shouldPreferSourceBuild(BuildInput input) {
     return _envFlagValue(override);
   }
 
-  final packagePath = Directory.fromUri(input.packageRoot).absolute.path;
-  return shouldPreferSourceBuildForPackagePath(
-    packagePath,
-    hasGhosttySourceRoot: _canResolveGhosttySourceRoot(input),
-  );
+  return false;
 }
 
 bool shouldPreferSourceBuildForPackagePath(
