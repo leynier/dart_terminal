@@ -107,7 +107,15 @@ bool _shouldPreferSourceBuild(BuildInput input) {
     return _envFlagValue(override);
   }
 
-  return false;
+  // A checkout outside the pub cache carries its own ghostty submodule, which
+  // may sit at a different revision than the one the pinned release was built
+  // from. Downloading that release would then link a library whose ABI does not
+  // match the generated bindings, which corrupts memory instead of failing to
+  // link, so such a checkout builds from its own source.
+  return shouldPreferSourceBuildForPackagePath(
+    Directory.fromUri(input.packageRoot).absolute.path,
+    hasGhosttySourceRoot: _canResolveGhosttySourceRoot(input),
+  );
 }
 
 bool shouldPreferSourceBuildForPackagePath(
