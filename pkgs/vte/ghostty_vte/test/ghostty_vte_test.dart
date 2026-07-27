@@ -1085,6 +1085,44 @@ void main() {
     expect(terminal.scrollbackRows, 0);
   });
 
+  // --- unicode widths ---
+
+  test('codepointWidth reports narrow, wide, and zero-width codepoints', () {
+    expect(GhosttyVt.codepointWidth(0x41), 1); // A
+    expect(GhosttyVt.codepointWidth(0x4E2D), 2); // CJK
+    expect(GhosttyVt.codepointWidth(0x0301), 0); // combining acute
+    expect(GhosttyVt.codepointWidth(0x200D), 0); // ZWJ
+  });
+
+  test('measureGraphemeCluster keeps a combining mark with its base', () {
+    final cluster = GhosttyVt.measureGraphemeCluster(<int>[0x65, 0x0301, 0x66]);
+
+    expect(cluster.codepointCount, 2);
+    expect(cluster.width, 1);
+  });
+
+  test('measureGraphemeCluster returns an empty cluster for no input', () {
+    final cluster = GhosttyVt.measureGraphemeCluster(<int>[]);
+
+    expect(cluster.codepointCount, 0);
+    expect(cluster.width, 0);
+  });
+
+  test('displayWidth measures a zwj emoji sequence as one cluster', () {
+    // Family emoji: four people joined by ZWJ. Summing per-codepoint widths
+    // would overcount it badly.
+    const family = '\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}';
+
+    expect(GhosttyVt.displayWidth(family), 2);
+  });
+
+  test('displayWidth sums mixed-width text', () {
+    expect(GhosttyVt.displayWidth('ab'), 2);
+    expect(GhosttyVt.displayWidth('中文'), 4);
+    expect(GhosttyVt.displayWidth('a中'), 3);
+    expect(GhosttyVt.displayWidth(''), 0);
+  });
+
   // Scrollback moved out of the terminal constructor and into a runtime
   // option, so these pin the budget down to observable behavior rather than
   // trusting that the option was applied.

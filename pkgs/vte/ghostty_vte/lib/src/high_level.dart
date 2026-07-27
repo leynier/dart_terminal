@@ -95,6 +95,76 @@ final class GhosttyVt {
     }
   }
 
+  /// Returns the display width of [codepoint] in terminal cells: 0, 1, or 2.
+  ///
+  /// Uses the same width table the terminal itself uses when laying out
+  /// printed text, so callers can predict column layout that matches what the
+  /// terminal will do. Zero-width covers control characters, combining marks,
+  /// and default-ignorable codepoints such as ZWJ and variation selectors.
+  ///
+  /// Summing this over a string is only correct when grapheme clustering
+  /// (mode 2027) is off. Use [measureGraphemeCluster] or [displayWidth]
+  /// otherwise.
+  static int codepointWidth(int codepoint) =>
+      bindings.ghostty_unicode_codepoint_width(codepoint);
+
+  /// Measures the first grapheme cluster in [codepoints].
+  ///
+  /// Applies the terminal's own cluster rules, so emoji ZWJ sequences,
+  /// variation selectors, combining marks, and skin tone modifiers are
+  /// measured as one cluster. Returns a zero-length result only when
+  /// [codepoints] is empty.
+  static VtGraphemeCluster measureGraphemeCluster(List<int> codepoints) {
+    if (codepoints.isEmpty) {
+      return const VtGraphemeCluster(codepointCount: 0, width: 0);
+    }
+    final cps = calloc<ffi.Uint32>(codepoints.length);
+    final width = calloc<ffi.Uint8>();
+    try {
+      cps.asTypedList(codepoints.length).setAll(0, codepoints);
+      final consumed = bindings.ghostty_unicode_grapheme_width(
+        cps,
+        codepoints.length,
+        width,
+      );
+      return VtGraphemeCluster(codepointCount: consumed, width: width.value);
+    } finally {
+      calloc.free(cps);
+      calloc.free(width);
+    }
+  }
+
+  /// Returns the total display width of [text] in terminal cells, segmenting
+  /// it into grapheme clusters the way the terminal does with mode 2027 on.
+  static int displayWidth(String text) {
+    final codepoints = text.runes.toList(growable: false);
+    if (codepoints.isEmpty) {
+      return 0;
+    }
+    // One allocation for the whole string; the loop walks the pointer forward
+    // rather than copying a shrinking tail on every cluster.
+    final cps = calloc<ffi.Uint32>(codepoints.length);
+    final width = calloc<ffi.Uint8>();
+    try {
+      cps.asTypedList(codepoints.length).setAll(0, codepoints);
+      var total = 0;
+      var i = 0;
+      while (i < codepoints.length) {
+        final consumed = bindings.ghostty_unicode_grapheme_width(
+          cps + i,
+          codepoints.length - i,
+          width,
+        );
+        total += width.value;
+        i += consumed;
+      }
+      return total;
+    } finally {
+      calloc.free(cps);
+      calloc.free(width);
+    }
+  }
+
   /// Encodes paste bytes for terminal input.
   ///
   /// Unsafe control bytes are rewritten, and bracketed paste markers are
@@ -637,6 +707,24 @@ final class GhosttyNamedColor {
 /// const red = VtRgbColor(255, 0, 0);
 /// print('Red: ${red.r}, Green: ${red.g}, Blue: ${red.b}');
 /// ```
+/// One grapheme cluster measured by [GhosttyVt.measureGraphemeCluster].
+final class VtGraphemeCluster {
+  const VtGraphemeCluster({
+    required this.codepointCount,
+    required this.width,
+  });
+
+  /// Codepoints the terminal consumed to complete the cluster.
+  final int codepointCount;
+
+  /// Display width of the cluster in cells: 0, 1, or 2.
+  final int width;
+
+  @override
+  String toString() =>
+      'VtGraphemeCluster(codepointCount: $codepointCount, width: $width)';
+}
+
 final class VtRgbColor {
   const VtRgbColor(this.r, this.g, this.b);
 
