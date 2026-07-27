@@ -9,7 +9,7 @@ import 'package:ghostty_vte/src/hook/dynamic_library.dart';
 import 'package:ghostty_vte/src/hook/asset_hashes.dart';
 import 'package:ghostty_vte/src/hook/source_patches.dart';
 
-const _repo = 'kingwill101/dart_terminal';
+const _repo = 'leynier/dart_terminal';
 
 void _info(String message) => stdout.writeln(message);
 
