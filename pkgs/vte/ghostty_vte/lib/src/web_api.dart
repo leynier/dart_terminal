@@ -867,7 +867,7 @@ void _checkResult(int result, String operation) {
 
 const int _ghosttyFormatterScreenExtraSize = 12;
 const int _ghosttyFormatterTerminalExtraSize = 24;
-const int _ghosttyFormatterTerminalOptionsSize = 36;
+const int _ghosttyFormatterTerminalOptionsSize = 40;
 const int _ghosttyTerminalScrollViewportSize = 24;
 const int _ghosttyStringSize = 8;
 const int _ghosttyColorRgbSize = 3;
@@ -883,7 +883,8 @@ const int _ghosttyBuildInfoVersionString = 5;
 const int _ghosttyBuildInfoVersionMajor = 6;
 const int _ghosttyBuildInfoVersionMinor = 7;
 const int _ghosttyBuildInfoVersionPatch = 8;
-const int _ghosttyBuildInfoVersionBuild = 9;
+// 9 is VERSION_PRE, which this API does not expose.
+const int _ghosttyBuildInfoVersionBuild = 10;
 
 const int _ghosttyTerminalOptColorForeground = 11;
 const int _ghosttyTerminalOptColorBackground = 12;
@@ -1001,6 +1002,10 @@ void _writeFormatterTerminalOptions(
   _writeBoolByte(rt, ptr, 31, screen.protection);
   _writeBoolByte(rt, ptr, 32, screen.kittyKeyboard);
   _writeBoolByte(rt, ptr, 33, screen.charsets);
+  // Trailing `const GhosttySelection *selection`. NULL formats the whole
+  // screen, which is what this path wants; leaving it unwritten had libghostty
+  // read the pointer from past the end of the allocation.
+  rt.writeU32(ptr + 36, 0);
 }
 
 final class GhosttyModsMask {
