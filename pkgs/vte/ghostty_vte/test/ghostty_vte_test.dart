@@ -1085,6 +1085,166 @@ void main() {
     expect(terminal.scrollbackRows, 0);
   });
 
+  // --- selection ---
+
+  test('selectWord derives the word under a point', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('hello world');
+
+    final selection = terminal.selectWord(const VtPoint.active(1, 0));
+    expect(selection, isNotNull);
+    addTearDown(selection!.close);
+
+    expect(terminal.formatSelection(selection: selection), 'hello');
+  });
+
+  test('selectWord over whitespace selects the whitespace run', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('hi there');
+
+    final selection = terminal.selectWord(const VtPoint.active(2, 0));
+    expect(selection, isNotNull);
+    addTearDown(selection!.close);
+
+    // Trimming is what hides it, so the range has to be read untrimmed.
+    expect(terminal.formatSelection(selection: selection, trim: false), ' ');
+  });
+
+  test('selectWord honors custom boundary codepoints', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('foo-bar');
+
+    // With '-' as a boundary the word stops before it.
+    final selection = terminal.selectWord(
+      const VtPoint.active(1, 0),
+      boundaryCodepoints: <int>[0x2D],
+    );
+    expect(selection, isNotNull);
+    addTearDown(selection!.close);
+
+    expect(terminal.formatSelection(selection: selection), 'foo');
+  });
+
+  test('selectLine selects the whole line and trims it', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('alpha beta');
+
+    final selection = terminal.selectLine(const VtPoint.active(0, 0));
+    expect(selection, isNotNull);
+    addTearDown(selection!.close);
+
+    expect(terminal.formatSelection(selection: selection), 'alpha beta');
+  });
+
+  test('selectAll spans the written rows', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('one\r\ntwo');
+
+    final selection = terminal.selectAll();
+    expect(selection, isNotNull);
+    addTearDown(selection!.close);
+
+    expect(terminal.formatSelection(selection: selection), contains('one'));
+    expect(terminal.formatSelection(selection: selection), contains('two'));
+  });
+
+  test('selectionContains covers the selected cells only', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('hello world');
+
+    final selection = terminal.selectWord(const VtPoint.active(1, 0))!;
+    addTearDown(selection.close);
+
+    expect(
+      terminal.selectionContains(selection, const VtPoint.active(2, 0)),
+      isTrue,
+    );
+    expect(
+      terminal.selectionContains(selection, const VtPoint.active(8, 0)),
+      isFalse,
+    );
+  });
+
+  test('selectionsEqual distinguishes different ranges', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('hello world');
+
+    final word = terminal.selectWord(const VtPoint.active(1, 0))!;
+    final sameWord = terminal.selectWord(const VtPoint.active(3, 0))!;
+    final line = terminal.selectLine(const VtPoint.active(0, 0))!;
+    addTearDown(word.close);
+    addTearDown(sameWord.close);
+    addTearDown(line.close);
+
+    expect(terminal.selectionsEqual(word, sameWord), isTrue);
+    expect(terminal.selectionsEqual(word, line), isFalse);
+  });
+
+  test('selectionOrder reports a forward selection', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('hello world');
+
+    final selection = terminal.selectWord(const VtPoint.active(1, 0))!;
+    addTearDown(selection.close);
+
+    expect(
+      terminal.selectionOrder(selection),
+      GhosttySelectionOrder.GHOSTTY_SELECTION_ORDER_FORWARD,
+    );
+  });
+
+  test('adjustSelection extends the range', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('hello world');
+
+    final selection = terminal.selectWord(const VtPoint.active(1, 0))!;
+    addTearDown(selection.close);
+    expect(selection.endX, 4);
+
+    terminal.adjustSelection(
+      selection,
+      GhosttySelectionAdjust.GHOSTTY_SELECTION_ADJUST_RIGHT,
+    );
+    expect(selection.endX, 5);
+
+    // The text only grows once the end passes the trailing space, which
+    // trimming hides.
+    terminal.adjustSelection(
+      selection,
+      GhosttySelectionAdjust.GHOSTTY_SELECTION_ADJUST_RIGHT,
+    );
+    expect(terminal.formatSelection(selection: selection), 'hello w');
+  });
+
+  test('a closed selection rejects further use', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('hello');
+
+    final selection = terminal.selectWord(const VtPoint.active(1, 0))!;
+    selection.close();
+    selection.close(); // idempotent
+
+    expect(() => selection.rectangle, throwsStateError);
+  });
+
+  test('formatSelection returns null when nothing is selected', () {
+    final terminal = GhosttyVt.newTerminal(cols: 40, rows: 5);
+    addTearDown(terminal.close);
+    terminal.write('hello');
+
+    expect(terminal.formatSelection(), isNull);
+  });
+
   // --- unicode widths ---
 
   test('codepointWidth reports narrow, wide, and zero-width codepoints', () {
