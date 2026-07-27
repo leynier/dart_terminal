@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.5
+
+- Added `GhosttyVt.codepointWidth`, `GhosttyVt.measureGraphemeCluster`, and
+  `GhosttyVt.displayWidth`, which measure text with the terminal's own width
+  table and grapheme segmentation. Available on both the native and wasm paths.
+- Added the terminal selection API: `selectWord`, `selectWordBetween`,
+  `selectLine`, `selectAll`, `selectOutput`, `formatSelection`,
+  `adjustSelection`, `selectionOrder`, `selectionOrdered`, `selectionContains`,
+  and `selectionsEqual`, with `VtSelection` owning the native snapshot. Native
+  only: the wasm path does not carry grid references, which this API is
+  addressed by.
+- No new prebuilts: these symbols are already in the `ghostty_vte-v0.1.4`
+  binaries, which were built from the same Ghostty revision.
+
 ## 0.1.4
 
 - Updated the bundled Ghostty to `2dd79f3`, which brings upstream VT throughput

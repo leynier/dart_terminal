@@ -1056,6 +1056,24 @@ final class GhosttyNamedColor {
   static const int brightWhite = GHOSTTY_COLOR_NAMED_BRIGHT_WHITE;
 }
 
+/// One grapheme cluster measured by [GhosttyVt.measureGraphemeCluster].
+final class VtGraphemeCluster {
+  const VtGraphemeCluster({
+    required this.codepointCount,
+    required this.width,
+  });
+
+  /// Codepoints the terminal consumed to complete the cluster.
+  final int codepointCount;
+
+  /// Display width of the cluster in cells: 0, 1, or 2.
+  final int width;
+
+  @override
+  String toString() =>
+      'VtGraphemeCluster(codepointCount: $codepointCount, width: $width)';
+}
+
 final class VtRgbColor {
   const VtRgbColor(this.r, this.g, this.b);
 
@@ -3811,6 +3829,97 @@ final class GhosttyVt {
 
   static bool isPasteSafe(String text) {
     return isPasteSafeBytes(utf8.encode(text));
+  }
+
+  /// Returns the display width of [codepoint] in terminal cells: 0, 1, or 2.
+  ///
+  /// See the native implementation for the full semantics. Requires the wasm
+  /// runtime; there is no table to fall back to before initialization.
+  static int codepointWidth(int codepoint) {
+    final rt = _requireTerminalRuntime('ghostty_unicode_codepoint_width');
+    return rt.callInt('ghostty_unicode_codepoint_width', <Object>[codepoint]);
+  }
+
+  /// Measures the first grapheme cluster in [codepoints].
+  static VtGraphemeCluster measureGraphemeCluster(List<int> codepoints) {
+    if (codepoints.isEmpty) {
+      return const VtGraphemeCluster(codepointCount: 0, width: 0);
+    }
+    final rt = _requireTerminalRuntime('ghostty_unicode_grapheme_width');
+    final cpsPtr = _allocU8ArrayOrThrow(
+      rt,
+      codepoints.length * 4,
+      'ghostty_wasm_alloc_u8_array',
+    );
+    final widthPtr = rt.allocU8();
+    if (widthPtr == 0) {
+      rt.freeU8Array(cpsPtr, codepoints.length * 4);
+      throw GhosttyVtError(
+        'ghostty_wasm_alloc_u8',
+        GhosttyResult.GHOSTTY_OUT_OF_MEMORY,
+      );
+    }
+    try {
+      for (var i = 0; i < codepoints.length; i++) {
+        rt.writeU32(cpsPtr + (i * 4), codepoints[i]);
+      }
+      final consumed = rt.callInt('ghostty_unicode_grapheme_width', <Object>[
+        cpsPtr,
+        codepoints.length,
+        widthPtr,
+      ]);
+      return VtGraphemeCluster(
+        codepointCount: consumed,
+        width: rt.readU8(widthPtr),
+      );
+    } finally {
+      rt.freeU8(widthPtr);
+      rt.freeU8Array(cpsPtr, codepoints.length * 4);
+    }
+  }
+
+  /// Returns the total display width of [text] in terminal cells, segmenting
+  /// it into grapheme clusters the way the terminal does with mode 2027 on.
+  static int displayWidth(String text) {
+    final codepoints = text.runes.toList(growable: false);
+    if (codepoints.isEmpty) {
+      return 0;
+    }
+    final rt = _requireTerminalRuntime('ghostty_unicode_grapheme_width');
+    final byteLen = codepoints.length * 4;
+    final cpsPtr = _allocU8ArrayOrThrow(
+      rt,
+      byteLen,
+      'ghostty_wasm_alloc_u8_array',
+    );
+    final widthPtr = rt.allocU8();
+    if (widthPtr == 0) {
+      rt.freeU8Array(cpsPtr, byteLen);
+      throw GhosttyVtError(
+        'ghostty_wasm_alloc_u8',
+        GhosttyResult.GHOSTTY_OUT_OF_MEMORY,
+      );
+    }
+    try {
+      for (var i = 0; i < codepoints.length; i++) {
+        rt.writeU32(cpsPtr + (i * 4), codepoints[i]);
+      }
+      var total = 0;
+      var i = 0;
+      while (i < codepoints.length) {
+        final consumed = rt.callInt('ghostty_unicode_grapheme_width', <Object>[
+          cpsPtr + (i * 4),
+          codepoints.length - i,
+          widthPtr,
+        ]);
+        total += rt.readU8(widthPtr);
+        i += consumed;
+      }
+      return total;
+    } finally {
+      rt.freeU8(widthPtr);
+      rt.freeU8Array(cpsPtr, byteLen);
+    }
   }
 
   static bool isPasteSafeBytes(List<int> bytes) {

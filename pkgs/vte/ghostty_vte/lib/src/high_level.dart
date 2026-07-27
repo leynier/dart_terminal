@@ -95,6 +95,76 @@ final class GhosttyVt {
     }
   }
 
+  /// Returns the display width of [codepoint] in terminal cells: 0, 1, or 2.
+  ///
+  /// Uses the same width table the terminal itself uses when laying out
+  /// printed text, so callers can predict column layout that matches what the
+  /// terminal will do. Zero-width covers control characters, combining marks,
+  /// and default-ignorable codepoints such as ZWJ and variation selectors.
+  ///
+  /// Summing this over a string is only correct when grapheme clustering
+  /// (mode 2027) is off. Use [measureGraphemeCluster] or [displayWidth]
+  /// otherwise.
+  static int codepointWidth(int codepoint) =>
+      bindings.ghostty_unicode_codepoint_width(codepoint);
+
+  /// Measures the first grapheme cluster in [codepoints].
+  ///
+  /// Applies the terminal's own cluster rules, so emoji ZWJ sequences,
+  /// variation selectors, combining marks, and skin tone modifiers are
+  /// measured as one cluster. Returns a zero-length result only when
+  /// [codepoints] is empty.
+  static VtGraphemeCluster measureGraphemeCluster(List<int> codepoints) {
+    if (codepoints.isEmpty) {
+      return const VtGraphemeCluster(codepointCount: 0, width: 0);
+    }
+    final cps = calloc<ffi.Uint32>(codepoints.length);
+    final width = calloc<ffi.Uint8>();
+    try {
+      cps.asTypedList(codepoints.length).setAll(0, codepoints);
+      final consumed = bindings.ghostty_unicode_grapheme_width(
+        cps,
+        codepoints.length,
+        width,
+      );
+      return VtGraphemeCluster(codepointCount: consumed, width: width.value);
+    } finally {
+      calloc.free(cps);
+      calloc.free(width);
+    }
+  }
+
+  /// Returns the total display width of [text] in terminal cells, segmenting
+  /// it into grapheme clusters the way the terminal does with mode 2027 on.
+  static int displayWidth(String text) {
+    final codepoints = text.runes.toList(growable: false);
+    if (codepoints.isEmpty) {
+      return 0;
+    }
+    // One allocation for the whole string; the loop walks the pointer forward
+    // rather than copying a shrinking tail on every cluster.
+    final cps = calloc<ffi.Uint32>(codepoints.length);
+    final width = calloc<ffi.Uint8>();
+    try {
+      cps.asTypedList(codepoints.length).setAll(0, codepoints);
+      var total = 0;
+      var i = 0;
+      while (i < codepoints.length) {
+        final consumed = bindings.ghostty_unicode_grapheme_width(
+          cps + i,
+          codepoints.length - i,
+          width,
+        );
+        total += width.value;
+        i += consumed;
+      }
+      return total;
+    } finally {
+      calloc.free(cps);
+      calloc.free(width);
+    }
+  }
+
   /// Encodes paste bytes for terminal input.
   ///
   /// Unsafe control bytes are rewritten, and bracketed paste markers are
@@ -637,6 +707,114 @@ final class GhosttyNamedColor {
 /// const red = VtRgbColor(255, 0, 0);
 /// print('Red: ${red.r}, Green: ${red.g}, Blue: ${red.b}');
 /// ```
+/// A selection range snapshot taken from a terminal.
+///
+/// The endpoints reference pages inside the terminal, not just coordinates, so
+/// a snapshot is only valid until the next operation that mutates that
+/// terminal. Using one afterwards is undefined; take a fresh one instead.
+///
+/// Owns native memory. Call [close] when done.
+final class VtSelection {
+  VtSelection._(this._ptr);
+
+  final ffi.Pointer<bindings.GhosttySelection> _ptr;
+  bool _closed = false;
+
+  /// Whether the endpoints describe opposite corners of a block selection
+  /// rather than a linear range.
+  bool get rectangle {
+    _ensureOpen();
+    return _ptr.ref.rectangle;
+  }
+
+  /// Column of the selection start. May be after [endX] in terminal order.
+  int get startX {
+    _ensureOpen();
+    return _ptr.ref.start.x;
+  }
+
+  /// Row of the selection start, relative to the page it references.
+  int get startY {
+    _ensureOpen();
+    return _ptr.ref.start.y;
+  }
+
+  /// Column of the selection end. May be before [startX] in terminal order.
+  int get endX {
+    _ensureOpen();
+    return _ptr.ref.end.x;
+  }
+
+  /// Row of the selection end, relative to the page it references.
+  int get endY {
+    _ensureOpen();
+    return _ptr.ref.end.y;
+  }
+
+  /// Releases the native memory backing this snapshot. Idempotent.
+  void close() {
+    if (_closed) {
+      return;
+    }
+    _closed = true;
+    calloc.free(_ptr);
+  }
+
+  void _ensureOpen() {
+    if (_closed) {
+      throw StateError('VtSelection is already closed.');
+    }
+  }
+
+  @override
+  String toString() => _closed
+      ? 'VtSelection(closed)'
+      : 'VtSelection(start: ($startX, $startY), end: ($endX, $endY), '
+            'rectangle: $rectangle)';
+}
+
+/// A codepoint array handed to native code, or a null pointer for "use the
+/// defaults", which is what the selection options mean by an absent list.
+final class _NativeCodepoints {
+  const _NativeCodepoints(this.ptr, this.length);
+
+  final ffi.Pointer<ffi.Uint32> ptr;
+  final int length;
+
+  void free() {
+    if (ptr != ffi.nullptr) {
+      calloc.free(ptr);
+    }
+  }
+}
+
+_NativeCodepoints _allocCodepoints(List<int>? codepoints) {
+  if (codepoints == null || codepoints.isEmpty) {
+    return _NativeCodepoints(ffi.nullptr, 0);
+  }
+  final ptr = calloc<ffi.Uint32>(codepoints.length);
+  ptr.asTypedList(codepoints.length).setAll(0, codepoints);
+  return _NativeCodepoints(ptr, codepoints.length);
+}
+
+/// One grapheme cluster measured by [GhosttyVt.measureGraphemeCluster].
+final class VtGraphemeCluster {
+  const VtGraphemeCluster({
+    required this.codepointCount,
+    required this.width,
+  });
+
+  /// Codepoints the terminal consumed to complete the cluster.
+  final int codepointCount;
+
+  /// Display width of the cluster in cells: 0, 1, or 2.
+  final int width;
+
+  @override
+  String toString() =>
+      'VtGraphemeCluster(codepointCount: $codepointCount, width: $width)';
+}
+
 final class VtRgbColor {
   const VtRgbColor(this.r, this.g, this.b);
 
@@ -3176,6 +3354,332 @@ final class VtTerminal {
 
   /// Resolves the history cell at zero-based column [x] and row [y].
   VtGridRefSnapshot historyCell(int x, int y) => gridRef(VtPoint.history(x, y));
+
+  // --- selection ---
+
+  /// Derives the word selection under [point].
+  ///
+  /// Returns null when there is no word there, such as over whitespace.
+  /// Pass [boundaryCodepoints] to override Ghostty's default word boundaries.
+  VtSelection? selectWord(VtPoint point, {List<int>? boundaryCodepoints}) {
+    _ensureOpen();
+    final options = calloc<bindings.GhosttyTerminalSelectWordOptions>();
+    final boundary = _allocCodepoints(boundaryCodepoints);
+    final out = _newSelection();
+    try {
+      options.ref.size =
+          ffi.sizeOf<bindings.GhosttyTerminalSelectWordOptions>();
+      _writeGridRef(options.ref.ref, point);
+      options.ref.boundary_codepoints = boundary.ptr;
+      options.ref.boundary_codepoints_len = boundary.length;
+      return _takeSelection(
+        bindings.ghostty_terminal_select_word(_handle, options, out),
+        out,
+        'ghostty_terminal_select_word',
+      );
+    } finally {
+      calloc.free(options);
+      boundary.free();
+    }
+  }
+
+  /// Derives the nearest word selection between [start] and [end] inclusive.
+  ///
+  /// Returns null when the range holds no word.
+  VtSelection? selectWordBetween(
+    VtPoint start,
+    VtPoint end, {
+    List<int>? boundaryCodepoints,
+  }) {
+    _ensureOpen();
+    final options = calloc<bindings.GhosttyTerminalSelectWordBetweenOptions>();
+    final boundary = _allocCodepoints(boundaryCodepoints);
+    final out = _newSelection();
+    try {
+      options.ref.size =
+          ffi.sizeOf<bindings.GhosttyTerminalSelectWordBetweenOptions>();
+      _writeGridRef(options.ref.start, start);
+      _writeGridRef(options.ref.end, end);
+      options.ref.boundary_codepoints = boundary.ptr;
+      options.ref.boundary_codepoints_len = boundary.length;
+      return _takeSelection(
+        bindings.ghostty_terminal_select_word_between(_handle, options, out),
+        out,
+        'ghostty_terminal_select_word_between',
+      );
+    } finally {
+      calloc.free(options);
+      boundary.free();
+    }
+  }
+
+  /// Derives the line selection under [point], trimming [whitespace] from both
+  /// ends. Set [semanticPromptBoundary] to stop the selection at shell prompt
+  /// boundaries reported through semantic prompt sequences.
+  ///
+  /// Returns null when there is no line there.
+  VtSelection? selectLine(
+    VtPoint point, {
+    List<int>? whitespace,
+    bool semanticPromptBoundary = false,
+  }) {
+    _ensureOpen();
+    final options = calloc<bindings.GhosttyTerminalSelectLineOptions>();
+    final ws = _allocCodepoints(whitespace);
+    final out = _newSelection();
+    try {
+      options.ref.size =
+          ffi.sizeOf<bindings.GhosttyTerminalSelectLineOptions>();
+      _writeGridRef(options.ref.ref, point);
+      options.ref.whitespace = ws.ptr;
+      options.ref.whitespace_len = ws.length;
+      options.ref.semantic_prompt_boundary = semanticPromptBoundary;
+      return _takeSelection(
+        bindings.ghostty_terminal_select_line(_handle, options, out),
+        out,
+        'ghostty_terminal_select_line',
+      );
+    } finally {
+      calloc.free(options);
+      ws.free();
+    }
+  }
+
+  /// Selects the entire scrollback and viewport.
+  ///
+  /// Returns null when the terminal holds nothing to select.
+  VtSelection? selectAll() {
+    _ensureOpen();
+    final out = _newSelection();
+    return _takeSelection(
+      bindings.ghostty_terminal_select_all(_handle, out),
+      out,
+      'ghostty_terminal_select_all',
+    );
+  }
+
+  /// Selects the command output containing [point], as delimited by semantic
+  /// prompt sequences.
+  ///
+  /// Returns null when [point] is not inside command output.
+  VtSelection? selectOutput(VtPoint point) {
+    _ensureOpen();
+    final ref = calloc<bindings.GhosttyGridRef>();
+    final out = _newSelection();
+    try {
+      _writeGridRef(ref.ref, point);
+      return _takeSelection(
+        bindings.ghostty_terminal_select_output(_handle, ref.ref, out),
+        out,
+        'ghostty_terminal_select_output',
+      );
+    } finally {
+      calloc.free(ref);
+    }
+  }
+
+  /// Formats [selection] as text, or the terminal's active selection when
+  /// [selection] is null.
+  ///
+  /// The defaults match Ghostty's own copy-to-clipboard behavior. Returns null
+  /// when there is nothing to format.
+  String? formatSelection({
+    VtSelection? selection,
+    bindings.GhosttyFormatterFormat emit =
+        bindings.GhosttyFormatterFormat.GHOSTTY_FORMATTER_FORMAT_PLAIN,
+    bool unwrap = true,
+    bool trim = true,
+  }) {
+    _ensureOpen();
+    selection?._ensureOpen();
+    final options = calloc<bindings.GhosttyTerminalSelectionFormatOptions>();
+    final outPtr = calloc<ffi.Pointer<ffi.Uint8>>();
+    final outLen = calloc<ffi.Size>();
+    try {
+      options.ref
+        ..size = ffi
+            .sizeOf<bindings.GhosttyTerminalSelectionFormatOptions>()
+        ..emitAsInt = emit.value
+        ..unwrap = unwrap
+        ..trim = trim
+        ..selection = selection?._ptr ?? ffi.nullptr;
+      final result = bindings.ghostty_terminal_selection_format_alloc(
+        _handle,
+        ffi.nullptr,
+        options.ref,
+        outPtr,
+        outLen,
+      );
+      if (result == bindings.GhosttyResult.GHOSTTY_NO_VALUE) {
+        return null;
+      }
+      _checkResult(result, 'ghostty_terminal_selection_format_alloc');
+      final len = outLen.value;
+      if (len == 0) {
+        return '';
+      }
+      try {
+        return utf8.decode(outPtr.value.asTypedList(len), allowMalformed: true);
+      } finally {
+        bindings.ghostty_free(ffi.nullptr, outPtr.value.cast(), len);
+      }
+    } finally {
+      calloc.free(options);
+      calloc.free(outPtr);
+      calloc.free(outLen);
+    }
+  }
+
+  /// Moves [selection]'s end point by [adjustment], in place.
+  void adjustSelection(
+    VtSelection selection,
+    bindings.GhosttySelectionAdjust adjustment,
+  ) {
+    _ensureOpen();
+    selection._ensureOpen();
+    _checkResult(
+      bindings.ghostty_terminal_selection_adjust(
+        _handle,
+        selection._ptr,
+        adjustment,
+      ),
+      'ghostty_terminal_selection_adjust',
+    );
+  }
+
+  /// Returns how [selection]'s endpoints are ordered in terminal coordinates.
+  bindings.GhosttySelectionOrder selectionOrder(VtSelection selection) {
+    _ensureOpen();
+    selection._ensureOpen();
+    final out = calloc<ffi.Int32>();
+    try {
+      _checkResult(
+        bindings.ghostty_terminal_selection_order(
+          _handle,
+          selection._ptr,
+          out.cast(),
+        ),
+        'ghostty_terminal_selection_order',
+      );
+      return bindings.GhosttySelectionOrder.fromValue(out.value);
+    } finally {
+      calloc.free(out);
+    }
+  }
+
+  /// Returns a copy of [selection] with its endpoints in [desired] order.
+  VtSelection selectionOrdered(
+    VtSelection selection,
+    bindings.GhosttySelectionOrder desired,
+  ) {
+    _ensureOpen();
+    selection._ensureOpen();
+    final out = _newSelection();
+    final result = bindings.ghostty_terminal_selection_ordered(
+      _handle,
+      selection._ptr,
+      desired,
+      out,
+    );
+    final ordered = _takeSelection(
+      result,
+      out,
+      'ghostty_terminal_selection_ordered',
+    );
+    if (ordered == null) {
+      throw StateError('ghostty_terminal_selection_ordered returned no value.');
+    }
+    return ordered;
+  }
+
+  /// Returns whether [selection] covers [point].
+  bool selectionContains(VtSelection selection, VtPoint point) {
+    _ensureOpen();
+    selection._ensureOpen();
+    final nativePoint = calloc<bindings.GhosttyPoint>();
+    final out = calloc<ffi.Bool>();
+    try {
+      point._writeTo(nativePoint.ref);
+      _checkResult(
+        bindings.ghostty_terminal_selection_contains(
+          _handle,
+          selection._ptr,
+          nativePoint.ref,
+          out,
+        ),
+        'ghostty_terminal_selection_contains',
+      );
+      return out.value;
+    } finally {
+      calloc.free(nativePoint);
+      calloc.free(out);
+    }
+  }
+
+  /// Returns whether [a] and [b] describe the same range.
+  bool selectionsEqual(VtSelection a, VtSelection b) {
+    _ensureOpen();
+    a._ensureOpen();
+    b._ensureOpen();
+    final out = calloc<ffi.Bool>();
+    try {
+      _checkResult(
+        bindings.ghostty_terminal_selection_equal(_handle, a._ptr, b._ptr, out),
+        'ghostty_terminal_selection_equal',
+      );
+      return out.value;
+    } finally {
+      calloc.free(out);
+    }
+  }
+
+  ffi.Pointer<bindings.GhosttySelection> _newSelection() {
+    final out = calloc<bindings.GhosttySelection>();
+    out.ref.size = ffi.sizeOf<bindings.GhosttySelection>();
+    return out;
+  }
+
+  /// Wraps [out] on success and frees it on [GhosttyResult.GHOSTTY_NO_VALUE],
+  /// which the selection API returns for "nothing here" rather than as an
+  /// error.
+  VtSelection? _takeSelection(
+    bindings.GhosttyResult result,
+    ffi.Pointer<bindings.GhosttySelection> out,
+    String operation,
+  ) {
+    if (result == bindings.GhosttyResult.GHOSTTY_NO_VALUE) {
+      calloc.free(out);
+      return null;
+    }
+    try {
+      _checkResult(result, operation);
+    } on Object {
+      calloc.free(out);
+      rethrow;
+    }
+    return VtSelection._(out);
+  }
+
+  void _writeGridRef(bindings.GhosttyGridRef ref, VtPoint point) {
+    final nativePoint = calloc<bindings.GhosttyPoint>();
+    final out = calloc<bindings.GhosttyGridRef>();
+    try {
+      out.ref.size = ffi.sizeOf<bindings.GhosttyGridRef>();
+      point._writeTo(nativePoint.ref);
+      _checkResult(
+        bindings.ghostty_terminal_grid_ref(_handle, nativePoint.ref, out),
+        'ghostty_terminal_grid_ref',
+      );
+      ref
+        ..size = out.ref.size
+        ..node = out.ref.node
+        ..x = out.ref.x
+        ..y = out.ref.y;
+    } finally {
+      calloc.free(nativePoint);
+      calloc.free(out);
+    }
+  }
 
   /// Creates a formatter that reflects the terminal state on each call.
   VtTerminalFormatter createFormatter([
