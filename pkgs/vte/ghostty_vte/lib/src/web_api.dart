@@ -865,7 +865,6 @@ void _checkResult(int result, String operation) {
   }
 }
 
-const int _ghosttyTerminalOptionsSize = 8;
 const int _ghosttyFormatterScreenExtraSize = 12;
 const int _ghosttyFormatterTerminalExtraSize = 24;
 const int _ghosttyFormatterTerminalOptionsSize = 36;
@@ -890,6 +889,7 @@ const int _ghosttyTerminalOptColorForeground = 11;
 const int _ghosttyTerminalOptColorBackground = 12;
 const int _ghosttyTerminalOptColorCursor = 13;
 const int _ghosttyTerminalOptColorPalette = 14;
+const int _ghosttyTerminalOptScrollbackMaxBytes = 27;
 
 const int _ghosttyTerminalDataColorForeground = 18;
 const int _ghosttyTerminalDataColorBackground = 19;
@@ -975,18 +975,6 @@ String _readGhosttyString(_GhosttyWasmRuntime rt, int ptr) {
 
 void _writeBoolByte(_GhosttyWasmRuntime rt, int ptr, int offset, bool value) {
   rt.writeU8(ptr + offset, value ? 1 : 0);
-}
-
-void _writeTerminalOptions(
-  _GhosttyWasmRuntime rt,
-  int ptr, {
-  required int cols,
-  required int rows,
-  required int maxScrollback,
-}) {
-  rt.writeU16(ptr, _checkPositiveUint16(cols, 'cols'));
-  rt.writeU16(ptr + 2, _checkPositiveUint16(rows, 'rows'));
-  rt.writeU32(ptr + 4, _checkNonNegative(maxScrollback, 'maxScrollback'));
 }
 
 void _writeFormatterTerminalOptions(
@@ -3100,28 +3088,38 @@ final class VtTerminal {
       _maxScrollback = _checkNonNegative(maxScrollback, 'maxScrollback'),
       _wasm = _requireTerminalRuntime('VtTerminal') {
     final out = _allocOpaqueOrThrow(_wasm, 'ghostty_wasm_alloc_opaque');
-    final optionsPtr = _allocU8ArrayOrThrow(
-      _wasm,
-      _ghosttyTerminalOptionsSize,
-      'ghostty_wasm_alloc_u8_array',
-    );
-    try {
-      _writeTerminalOptions(
-        _wasm,
-        optionsPtr,
-        cols: _cols,
-        rows: _rows,
-        maxScrollback: _maxScrollback,
+    final scrollbackPtr = _wasm.allocUsize();
+    if (scrollbackPtr == 0) {
+      _wasm.freeOpaque(out);
+      throw GhosttyVtError(
+        'ghostty_wasm_alloc_usize',
+        GhosttyResult.GHOSTTY_OUT_OF_MEMORY,
       );
+    }
+    try {
       final result = _wasm.callInt('ghostty_terminal_new', <Object>[
         0,
         out,
-        optionsPtr,
+        _cols,
+        _rows,
       ]);
       _checkResult(result, 'ghostty_terminal_new');
       _handle = _wasm.readPtr(out);
+
+      // Scrollback moved out of the constructor into a runtime option, and it
+      // is a byte budget rather than a line count. See the matching note in
+      // high_level.dart.
+      _wasm.writeU32(scrollbackPtr, _maxScrollback);
+      _checkResult(
+        _wasm.callInt('ghostty_terminal_set', <Object>[
+          _handle,
+          _ghosttyTerminalOptScrollbackMaxBytes,
+          scrollbackPtr,
+        ]),
+        'ghostty_terminal_set(SCROLLBACK_MAX_BYTES)',
+      );
     } finally {
-      _wasm.freeU8Array(optionsPtr, _ghosttyTerminalOptionsSize);
+      _wasm.freeUsize(scrollbackPtr);
       _wasm.freeOpaque(out);
     }
   }
