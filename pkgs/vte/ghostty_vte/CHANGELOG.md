@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.4
+
+- Updated the bundled Ghostty to `2dd79f3`, which brings upstream VT throughput
+  and render-state work, scrollback page compression, and fixes for a UTF-8
+  grapheme length overflow, an integer overflow in `selectPrev`, and page
+  capacity errors in `eraseRow` and `cursorScrollAbove`.
+- **Breaking (native ABI):** building this package now requires Zig 0.16.0.
+  `ghostty_terminal_new` lost `GhosttyTerminalOptions`, so the scrollback budget
+  is applied through `ghostty_terminal_set`. The Dart API is unchanged:
+  `VtTerminal(cols:, rows:, maxScrollback:)` still takes a byte budget.
+- Fixed a local checkout downloading the pinned release prebuilt instead of
+  building its own ghostty submodule, which could link a library whose ABI did
+  not match the generated bindings.
+- Fixed `GhosttyFormatterTerminalOptions` being allocated 4 bytes short on the
+  wasm path, which had libghostty read its trailing `selection` pointer from
+  past the end of the allocation.
+- Fixed `buildInfo.versionBuild` returning the pre-release string on the wasm
+  path.
+
 ## 0.1.3
 
 - Added iOS device and simulator prebuilt target support for `libghostty-vt`

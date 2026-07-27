@@ -385,7 +385,10 @@ void _writeStyleColorToNative(
 ) {
   native.tagAsInt = color.tag.value;
   switch (color.tag) {
+    // GHOSTTY_ENUM_TYPED emits a max-value member to pin the enum's width. It
+    // is never a value the library reads or writes, so it behaves as unset.
     case bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_NONE:
+    case bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_TAG_MAX_VALUE:
       native.value.palette = 0;
     case bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_PALETTE:
       native.value.palette = color.paletteIndex ?? 0;
@@ -641,18 +644,12 @@ final class VtRgbColor {
   final int g;
   final int b;
 
+  /// Reads the components straight off the struct, mirroring
+  /// [_writeRgbToNative]. `ghostty_color_rgb_get` now takes a pointer, and
+  /// routing through it would allocate four pointers per color on a path that
+  /// runs once per styled cell.
   factory VtRgbColor.fromNative(bindings.GhosttyColorRgb native) {
-    final r = calloc<ffi.Uint8>();
-    final g = calloc<ffi.Uint8>();
-    final b = calloc<ffi.Uint8>();
-    try {
-      bindings.ghostty_color_rgb_get(native, r, g, b);
-      return VtRgbColor(r.value, g.value, b.value);
-    } finally {
-      calloc.free(r);
-      calloc.free(g);
-      calloc.free(b);
-    }
+    return VtRgbColor(native.r, native.g, native.b);
   }
 
   @override
@@ -849,7 +846,8 @@ final class VtStyleColor {
 
   factory VtStyleColor.fromNative(bindings.GhosttyStyleColor native) {
     return switch (native.tag) {
-      bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_NONE =>
+      bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_NONE ||
+      bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_TAG_MAX_VALUE =>
         const VtStyleColor.none(),
       bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_PALETTE =>
         VtStyleColor.palette(native.value.palette),
@@ -1353,7 +1351,9 @@ final class VtRenderColors {
   /// Returns [defaultColor] when [color] is unset.
   VtRgbColor? resolve(VtStyleColor color, {VtRgbColor? defaultColor}) {
     return switch (color.tag) {
-      bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_NONE => defaultColor,
+      bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_NONE ||
+      bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_TAG_MAX_VALUE =>
+        defaultColor,
       bindings.GhosttyStyleColorTag.GHOSTTY_STYLE_COLOR_PALETTE => paletteAt(
         color.paletteIndex!,
       ),
@@ -2555,23 +2555,37 @@ final class VtTerminal {
     required int rows,
     required int maxScrollback,
   }) {
-    final optionsPtr = calloc<bindings.GhosttyTerminalOptions>();
+    final scrollbackPtr = calloc<ffi.Size>();
     final out = calloc<bindings.GhosttyTerminal>();
     try {
-      optionsPtr.ref
-        ..cols = _checkPositiveUint16(cols, 'cols')
-        ..rows = _checkPositiveUint16(rows, 'rows')
-        ..max_scrollback = _checkNonNegative(maxScrollback, 'maxScrollback');
       final result = bindings.ghostty_terminal_new(
         ffi.nullptr,
         out,
-        optionsPtr.ref,
+        _checkPositiveUint16(cols, 'cols'),
+        _checkPositiveUint16(rows, 'rows'),
       );
       _checkResult(result, 'ghostty_terminal_new');
+
+      // Scrollback moved out of the constructor into a runtime option. It is a
+      // byte budget, not a line count, matching what the removed
+      // GhosttyTerminalOptions.max_scrollback fed into PageList. Passing a
+      // pointer rather than null keeps the limit set; null would mean
+      // unlimited, which is not what the old constructor did.
+      scrollbackPtr.value = _checkNonNegative(maxScrollback, 'maxScrollback');
+      _checkResult(
+        bindings.ghostty_terminal_set(
+          out.value,
+          bindings
+              .GhosttyTerminalOption
+              .GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES,
+          scrollbackPtr.cast(),
+        ),
+        'ghostty_terminal_set(SCROLLBACK_MAX_BYTES)',
+      );
       return out.value;
     } finally {
       calloc.free(out);
-      calloc.free(optionsPtr);
+      calloc.free(scrollbackPtr);
     }
   }
 

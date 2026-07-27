@@ -1085,6 +1085,41 @@ void main() {
     expect(terminal.scrollbackRows, 0);
   });
 
+  // Scrollback moved out of the terminal constructor and into a runtime
+  // option, so these pin the budget down to observable behavior rather than
+  // trusting that the option was applied.
+  test('maxScrollback of zero retains no scrollback', () {
+    final terminal = GhosttyVt.newTerminal(
+      cols: 20,
+      rows: 4,
+      maxScrollback: 0,
+    );
+    addTearDown(terminal.close);
+
+    for (var i = 0; i < 200; i++) {
+      terminal.write('line $i\r\n');
+    }
+
+    expect(terminal.scrollbackRows, 0);
+    expect(terminal.totalRows, 4);
+  });
+
+  test('a generous maxScrollback retains history', () {
+    final terminal = GhosttyVt.newTerminal(
+      cols: 20,
+      rows: 4,
+      maxScrollback: 10 * 1024 * 1024,
+    );
+    addTearDown(terminal.close);
+
+    for (var i = 0; i < 200; i++) {
+      terminal.write('line $i\r\n');
+    }
+
+    expect(terminal.scrollbackRows, greaterThan(0));
+    expect(terminal.totalRows, greaterThan(4));
+  });
+
   test('widthPx and heightPx reflect pixel dimensions from resize', () {
     final terminal = GhosttyVt.newTerminal(cols: 80, rows: 24);
     addTearDown(terminal.close);
