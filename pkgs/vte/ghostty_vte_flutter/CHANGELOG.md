@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5
+
+- Fixed compilation against `ghostty_vte` 0.1.4 and later: upstream added a
+  `_MAX_VALUE` width sentinel to every C enum, which made the SGR attribute and
+  cursor visual style switches non-exhaustive.
+- Bumped `ghostty_vte` to `^0.1.5`.
+
 ## 0.1.4
 
 - Rebuilt the bundled `ghostty-vt.wasm` from Ghostty `2dd79f3`.
