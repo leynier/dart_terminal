@@ -1,0 +1,6 @@
+# Patches are applied with `git apply` against sources that other repositories
+# pin to LF, so they must never be checked out with CRLF. Without this a
+# Windows checkout resolves them through core.autocrlf and `git apply` rejects
+# them for mismatched line endings.
+*.patch text eol=lf
+*.diff text eol=lf
