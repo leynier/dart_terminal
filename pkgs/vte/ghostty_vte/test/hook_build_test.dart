@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:code_assets/code_assets.dart';
 import 'package:test/test.dart';
 
@@ -171,6 +173,67 @@ void main() {
       final bytes = bytesOf('+trailing\r');
 
       expect(source_patches.stripCarriageReturnsBeforeNewlines(bytes), bytes);
+    });
+  });
+
+  // Zig installs a Windows DLL under bin/ and leaves only the import library in
+  // lib/. Searching lib/ alone finds a .lib that cannot be loaded, which is how
+  // this broke on CI.
+  group('resolveBuiltLibrary', () {
+    const elfHeader = <int>[0x7F, 0x45, 0x4C, 0x46, 0x02, 0x01, 0x01, 0x00];
+    const peHeader = <int>[0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00];
+    const archiveHeader = <int>[0x21, 0x3C, 0x61, 0x72, 0x63, 0x68, 0x3E, 0x0A];
+
+    late Directory prefix;
+
+    setUp(() => prefix = Directory.systemTemp.createTempSync('vte_prefix_'));
+    tearDown(() => prefix.deleteSync(recursive: true));
+
+    Directory subdir(String name) =>
+        Directory('${prefix.path}${Platform.pathSeparator}$name')
+          ..createSync(recursive: true);
+
+    test('finds a windows dll in bin/ next to an import library in lib/', () {
+      File(
+        '${subdir('lib').path}${Platform.pathSeparator}ghostty-vt.lib',
+      ).writeAsBytesSync(archiveHeader);
+      File(
+        '${subdir('bin').path}${Platform.pathSeparator}ghostty-vt.dll',
+      ).writeAsBytesSync(peHeader);
+
+      expect(
+        build_hook.resolveBuiltLibrary(prefix, 'ghostty-vt.dll').toFilePath(),
+        endsWith('bin${Platform.pathSeparator}ghostty-vt.dll'),
+      );
+    });
+
+    test('still prefers lib/ for unix shared objects', () {
+      File(
+        '${subdir('lib').path}${Platform.pathSeparator}libghostty-vt.so',
+      ).writeAsBytesSync(elfHeader);
+
+      expect(
+        build_hook.resolveBuiltLibrary(prefix, 'libghostty-vt.so').toFilePath(),
+        endsWith('lib${Platform.pathSeparator}libghostty-vt.so'),
+      );
+    });
+
+    test('reports every directory it searched when nothing is loadable', () {
+      File(
+        '${subdir('lib').path}${Platform.pathSeparator}ghostty-vt.lib',
+      ).writeAsBytesSync(archiveHeader);
+      subdir('bin');
+
+      expect(
+        () => build_hook.resolveBuiltLibrary(prefix, 'ghostty-vt.dll'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(contains('lib'), contains('bin')),
+          ),
+        ),
+      );
     });
   });
 }
