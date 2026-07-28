@@ -2,6 +2,7 @@ import 'package:code_assets/code_assets.dart';
 import 'package:test/test.dart';
 
 import '../hook/build.dart' as build_hook;
+import 'package:ghostty_vte/src/hook/source_patches.dart' as source_patches;
 
 void main() {
   group('isPubCachePackagePath', () {
@@ -135,6 +136,41 @@ void main() {
         build_hook.zigTargetForBuildHook(OS.iOS, Architecture.x64),
         'x86_64-ios-simulator',
       );
+    });
+  });
+
+  // A Windows checkout resolves .patch files through core.autocrlf while the
+  // ghostty sources they apply to are pinned to LF, so `git apply` rejects
+  // them. This is the guard for that, and it cannot be reproduced on a Linux
+  // runner.
+  group('stripCarriageReturnsBeforeNewlines', () {
+    List<int> bytesOf(String text) => text.codeUnits;
+
+    test('rewrites CRLF to LF', () {
+      expect(
+        source_patches.stripCarriageReturnsBeforeNewlines(
+          bytesOf('--- a/x\r\n+++ b/x\r\n'),
+        ),
+        bytesOf('--- a/x\n+++ b/x\n'),
+      );
+    });
+
+    test('leaves LF-only content untouched', () {
+      final bytes = bytesOf('--- a/x\n+++ b/x\n');
+
+      expect(source_patches.stripCarriageReturnsBeforeNewlines(bytes), bytes);
+    });
+
+    test('keeps a carriage return that is not part of a line ending', () {
+      final bytes = bytesOf('+literal \r inside\n');
+
+      expect(source_patches.stripCarriageReturnsBeforeNewlines(bytes), bytes);
+    });
+
+    test('keeps a trailing carriage return', () {
+      final bytes = bytesOf('+trailing\r');
+
+      expect(source_patches.stripCarriageReturnsBeforeNewlines(bytes), bytes);
     });
   });
 }
