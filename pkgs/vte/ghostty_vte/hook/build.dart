@@ -485,7 +485,7 @@ Future<void> _buildFromSource(
     );
   }
 
-  final builtLib = _resolveBuiltLibrary(prefixDir, dylibName);
+  final builtLib = resolveBuiltLibrary(prefixDir, dylibName);
   await File.fromUri(builtLib).copy(File.fromUri(bundledLibUri).path);
 }
 
@@ -723,36 +723,57 @@ String zigTargetForBuildHook(OS os, Architecture arch, {IOSSdk? iOSSdk}) {
   );
 }
 
-Uri _resolveBuiltLibrary(Directory prefixDir, String dylibName) {
-  final direct = File.fromUri(prefixDir.uri.resolve('lib/$dylibName'));
-  if (direct.existsSync()) {
+Uri resolveBuiltLibrary(Directory prefixDir, String dylibName) {
+  // Zig installs a Windows DLL under bin/ and leaves only the import library in
+  // lib/, so searching lib/ alone finds a .lib that is not loadable. Unix
+  // targets keep their shared object in lib/, which stays first.
+  const searchSubdirectories = <String>['lib/', 'bin/'];
+
+  for (final subdirectory in searchSubdirectories) {
+    final direct = File.fromUri(
+      prefixDir.uri.resolve('$subdirectory$dylibName'),
+    );
+    if (direct.existsSync()) {
+      ensureDynamicLibraryFile(
+        direct,
+        canonicalName: dylibName,
+        sourceDescription: 'source build output',
+      );
+      return direct.uri;
+    }
+  }
+
+  final searched = <String>[];
+  for (final subdirectory in searchSubdirectories) {
+    final directory = Directory.fromUri(prefixDir.uri.resolve(subdirectory));
+    if (!directory.existsSync()) {
+      continue;
+    }
+    searched.add(directory.path);
+
+    final selected = selectDynamicLibraryEntity(
+      directory.listSync(),
+      canonicalName: dylibName,
+    );
+    if (selected == null) {
+      continue;
+    }
+    final file = File(selected.path);
     ensureDynamicLibraryFile(
-      direct,
+      file,
       canonicalName: dylibName,
       sourceDescription: 'source build output',
     );
-    return direct.uri;
+    return file.uri;
   }
 
-  final libDir = Directory.fromUri(prefixDir.uri.resolve('lib/'));
-  if (!libDir.existsSync()) {
-    throw StateError('Expected library directory: ${libDir.path}');
-  }
-
-  final selected = selectDynamicLibraryEntity(
-    libDir.listSync(),
-    canonicalName: dylibName,
-  );
-  if (selected == null) {
+  if (searched.isEmpty) {
     throw StateError(
-      'Could not find built ghostty-vt library in ${libDir.path}',
+      'Expected a library directory under ${prefixDir.path}, '
+      'searched: ${searchSubdirectories.join(', ')}',
     );
   }
-  final file = File(selected.path);
-  ensureDynamicLibraryFile(
-    file,
-    canonicalName: dylibName,
-    sourceDescription: 'source build output',
+  throw StateError(
+    'Could not find built ghostty-vt library in ${searched.join(', ')}',
   );
-  return file.uri;
 }
