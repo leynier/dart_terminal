@@ -441,6 +441,20 @@ Future<void> _buildFromSource(
     input.outputDirectory.resolve('ghostty/$target/'),
   )..createSync(recursive: true);
 
+  // Zig resolves its cache from the environment, and the Dart hooks runner
+  // hands hooks a filtered one. On Windows that strips the app data variables
+  // Zig falls back to, so it aborts with AppDataDirUnavailable. Pointing both
+  // caches at the shared output directory removes the dependency on inherited
+  // environment and keeps them across builds.
+  // The two caches keep separate directories because they hold different
+  // things: the global one holds fetched packages, the local one build output.
+  final zigLocalCacheDir = Directory.fromUri(
+    input.outputDirectoryShared.resolve('zig-cache/local/'),
+  )..createSync(recursive: true);
+  final zigGlobalCacheDir = Directory.fromUri(
+    input.outputDirectoryShared.resolve('zig-cache/global/'),
+  )..createSync(recursive: true);
+
   final zigArgs = <String>[
     'build',
     '-Demit-lib-vt=true',
@@ -449,6 +463,10 @@ Future<void> _buildFromSource(
     '-Dsimd=false',
     '--prefix',
     prefixDir.path,
+    '--cache-dir',
+    zigLocalCacheDir.path,
+    '--global-cache-dir',
+    zigGlobalCacheDir.path,
     '--summary',
     'failures',
   ];
