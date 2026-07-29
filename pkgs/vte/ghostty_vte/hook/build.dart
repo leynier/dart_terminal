@@ -7,7 +7,7 @@ import 'package:path/path.dart' as p;
 
 import 'package:ghostty_vte/src/hook/dynamic_library.dart';
 import 'package:ghostty_vte/src/hook/asset_hashes.dart';
-import 'package:ghostty_vte/src/hook/source_patches.dart';
+import 'package:ghostty_vte/src/hook/source_build_tree.dart';
 
 const _repo = 'leynier/dart_terminal';
 
@@ -424,10 +424,11 @@ Future<void> _buildFromSource(
   String dylibName,
   Uri bundledLibUri,
 ) async {
-  final ghosttyRoot = _resolveGhosttySourceRoot(input);
-  applyBundledGhosttyPatches(
+  final sourceRoot = _resolveGhosttySourceRoot(input);
+  final ghosttyRoot = prepareGhosttySourceBuildTree(
     packageRoot: Directory.fromUri(input.packageRoot),
-    ghosttyRoot: ghosttyRoot,
+    sourceRoot: sourceRoot,
+    outputDirectory: Directory.fromUri(input.outputDirectory),
     info: _info,
     warn: _warn,
   );

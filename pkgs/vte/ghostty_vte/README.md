@@ -426,6 +426,9 @@ The build hook looks for Ghostty source code in this order:
 3. **Auto-fetch** — set `GHOSTTY_SRC_AUTO_FETCH=1` and the build hook will
    `git clone` Ghostty automatically.
 
+Source builds copy the selected checkout into the build hook's output directory
+before applying bundled patches. The original checkout is never modified.
+
 ```bash
 # Option A: submodule
 git submodule add https://github.com/ghostty-org/ghostty third_party/ghostty

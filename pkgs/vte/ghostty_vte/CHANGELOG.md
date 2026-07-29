@@ -2,6 +2,8 @@
 
 ## 0.1.5
 
+- Source builds now stage and patch an isolated Ghostty tree in the hook output
+  directory, leaving the provided checkout unchanged.
 - Added `GhosttyVt.codepointWidth`, `GhosttyVt.measureGraphemeCluster`, and
   `GhosttyVt.displayWidth`, which measure text with the terminal's own width
   table and grapheme segmentation. Available on both the native and wasm paths.
