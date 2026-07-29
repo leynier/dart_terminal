@@ -1,8 +1,8 @@
 # ghostty_vte
 
-[![CI](https://github.com/kingwill101/dart_terminal/actions/workflows/vte.yml/badge.svg)](https://github.com/kingwill101/dart_terminal/actions/workflows/vte.yml)
+[![CI](https://github.com/leynier/dart_terminal/actions/workflows/vte.yml/badge.svg)](https://github.com/leynier/dart_terminal/actions/workflows/vte.yml)
 [![pub package](https://img.shields.io/pub/v/ghostty_vte.svg)](https://pub.dev/packages/ghostty_vte)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/kingwill101/dart_terminal/blob/master/pkgs/vte/ghostty_vte/LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/leynier/dart_terminal/blob/master/pkgs/vte/ghostty_vte/LICENSE)
 
 Dart FFI bindings for [Ghostty](https://github.com/ghostty-org/ghostty)'s
 virtual-terminal engine (`libghostty-vt`). Works on **native platforms** and
@@ -39,13 +39,13 @@ on the **web** via WebAssembly.
 
 ```yaml
 dependencies:
-  ghostty_vte: ^0.1.3
+  ghostty_vte: ^0.1.5
 ```
 
 The native library is compiled automatically by a
 [Dart build hook](https://dart.dev/interop/c-interop#native-assets)
 the first time you run `dart run`, `dart test`, `flutter run`, or
-`flutter build`. You need **Zig >= 0.15** on your `PATH` and access to the
+`flutter build`. You need **Zig 0.16.0** on your `PATH` and access to the
 Ghostty source (see [Ghostty source](#ghostty-source) below).
 
 > **Tip:** If you don't want to install Zig, download a
@@ -458,7 +458,7 @@ automatically — **no Zig install required**.
 You can also specify a release tag or target platform:
 
 ```bash
-dart run ghostty_vte:setup --tag ghostty_vte-v0.1.1 --platform macos-arm64
+dart run ghostty_vte:setup --tag ghostty_vte-v0.1.5 --platform macos-arm64
 ```
 
 **Monorepo users** can download all prebuilt libs at once:
@@ -518,4 +518,4 @@ Future<void> main() async {
 
 ## License
 
-MIT — see [LICENSE](https://github.com/kingwill101/dart_terminal/blob/master/pkgs/vte/ghostty_vte/LICENSE).
+MIT - see [LICENSE](https://github.com/leynier/dart_terminal/blob/master/pkgs/vte/ghostty_vte/LICENSE).

@@ -1,8 +1,8 @@
 # ghostty_vte_flutter
 
-[![CI](https://github.com/kingwill101/dart_terminal/actions/workflows/vte.yml/badge.svg)](https://github.com/kingwill101/dart_terminal/actions/workflows/vte.yml)
+[![CI](https://github.com/leynier/dart_terminal/actions/workflows/vte.yml/badge.svg)](https://github.com/leynier/dart_terminal/actions/workflows/vte.yml)
 [![pub package](https://img.shields.io/pub/v/ghostty_vte_flutter.svg)](https://pub.dev/packages/ghostty_vte_flutter)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/kingwill101/dart_terminal/blob/master/pkgs/vte/ghostty_vte_flutter/LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/leynier/dart_terminal/blob/master/pkgs/vte/ghostty_vte_flutter/LICENSE)
 
 Flutter terminal UI widgets powered by
 [Ghostty](https://github.com/ghostty-org/ghostty)'s VT engine.
@@ -37,7 +37,7 @@ single import.
 
 ```yaml
 dependencies:
-  ghostty_vte_flutter: ^0.1.3
+  ghostty_vte_flutter: ^0.1.5
 ```
 
 No separate `ghostty_vte` dependency is needed — it's re-exported
@@ -733,4 +733,4 @@ to skip the Zig requirement entirely.
 
 ## License
 
-MIT — see [LICENSE](https://github.com/kingwill101/dart_terminal/blob/master/pkgs/vte/ghostty_vte_flutter/LICENSE).
+MIT - see [LICENSE](https://github.com/leynier/dart_terminal/blob/master/pkgs/vte/ghostty_vte_flutter/LICENSE).
