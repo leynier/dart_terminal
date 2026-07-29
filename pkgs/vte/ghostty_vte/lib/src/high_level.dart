@@ -799,10 +799,7 @@ _NativeCodepoints _allocCodepoints(List<int>? codepoints) {
 
 /// One grapheme cluster measured by [GhosttyVt.measureGraphemeCluster].
 final class VtGraphemeCluster {
-  const VtGraphemeCluster({
-    required this.codepointCount,
-    required this.width,
-  });
+  const VtGraphemeCluster({required this.codepointCount, required this.width});
 
   /// Codepoints the terminal consumed to complete the cluster.
   final int codepointCount;
@@ -3367,8 +3364,8 @@ final class VtTerminal {
     final boundary = _allocCodepoints(boundaryCodepoints);
     final out = _newSelection();
     try {
-      options.ref.size =
-          ffi.sizeOf<bindings.GhosttyTerminalSelectWordOptions>();
+      options.ref.size = ffi
+          .sizeOf<bindings.GhosttyTerminalSelectWordOptions>();
       _writeGridRef(options.ref.ref, point);
       options.ref.boundary_codepoints = boundary.ptr;
       options.ref.boundary_codepoints_len = boundary.length;
@@ -3396,8 +3393,8 @@ final class VtTerminal {
     final boundary = _allocCodepoints(boundaryCodepoints);
     final out = _newSelection();
     try {
-      options.ref.size =
-          ffi.sizeOf<bindings.GhosttyTerminalSelectWordBetweenOptions>();
+      options.ref.size = ffi
+          .sizeOf<bindings.GhosttyTerminalSelectWordBetweenOptions>();
       _writeGridRef(options.ref.start, start);
       _writeGridRef(options.ref.end, end);
       options.ref.boundary_codepoints = boundary.ptr;
@@ -3428,8 +3425,8 @@ final class VtTerminal {
     final ws = _allocCodepoints(whitespace);
     final out = _newSelection();
     try {
-      options.ref.size =
-          ffi.sizeOf<bindings.GhosttyTerminalSelectLineOptions>();
+      options.ref.size = ffi
+          .sizeOf<bindings.GhosttyTerminalSelectLineOptions>();
       _writeGridRef(options.ref.ref, point);
       options.ref.whitespace = ws.ptr;
       options.ref.whitespace_len = ws.length;
@@ -3497,8 +3494,7 @@ final class VtTerminal {
     final outLen = calloc<ffi.Size>();
     try {
       options.ref
-        ..size = ffi
-            .sizeOf<bindings.GhosttyTerminalSelectionFormatOptions>()
+        ..size = ffi.sizeOf<bindings.GhosttyTerminalSelectionFormatOptions>()
         ..emitAsInt = emit.value
         ..unwrap = unwrap
         ..trim = trim

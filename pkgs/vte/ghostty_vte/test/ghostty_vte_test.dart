@@ -1287,11 +1287,7 @@ void main() {
   // option, so these pin the budget down to observable behavior rather than
   // trusting that the option was applied.
   test('maxScrollback of zero retains no scrollback', () {
-    final terminal = GhosttyVt.newTerminal(
-      cols: 20,
-      rows: 4,
-      maxScrollback: 0,
-    );
+    final terminal = GhosttyVt.newTerminal(cols: 20, rows: 4, maxScrollback: 0);
     addTearDown(terminal.close);
 
     for (var i = 0; i < 200; i++) {

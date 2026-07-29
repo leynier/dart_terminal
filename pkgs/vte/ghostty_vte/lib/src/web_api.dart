@@ -1058,10 +1058,7 @@ final class GhosttyNamedColor {
 
 /// One grapheme cluster measured by [GhosttyVt.measureGraphemeCluster].
 final class VtGraphemeCluster {
-  const VtGraphemeCluster({
-    required this.codepointCount,
-    required this.width,
-  });
+  const VtGraphemeCluster({required this.codepointCount, required this.width});
 
   /// Codepoints the terminal consumed to complete the cluster.
   final int codepointCount;
