@@ -119,6 +119,25 @@ void main() {
   });
 
   group('zigTargetForBuildHook', () {
+    test('uses emulated TLS compatible Android targets', () {
+      expect(
+        build_hook.zigTargetForBuildHook(OS.android, Architecture.arm),
+        'arm-linux-androideabi.21',
+      );
+      expect(
+        build_hook.zigTargetForBuildHook(OS.android, Architecture.arm64),
+        'aarch64-linux-android.21',
+      );
+      expect(
+        build_hook.zigTargetForBuildHook(OS.android, Architecture.x64),
+        'x86_64-linux-android.21',
+      );
+      expect(
+        build_hook.zigTargetForBuildHook(OS.android, Architecture.ia32),
+        'x86-linux-android.21',
+      );
+    });
+
     test('maps iOS device and simulator targets to Zig triples', () {
       expect(
         build_hook.zigTargetForBuildHook(
@@ -242,6 +261,37 @@ fn initLib(
       );
 
       expect(stagedFile.readAsStringSync(), contains('link_libc = true'));
+      expect(original.readAsBytesSync(), originalBytes);
+    });
+
+    test('patches output nested inside an unrelated Git checkout', () {
+      final repository = Directory(
+        '${temp.path}${Platform.pathSeparator}repository',
+      )..createSync();
+      final initialized = Process.runSync('git', <String>[
+        'init',
+      ], workingDirectory: repository.path);
+      expect(initialized.exitCode, 0);
+      source = Directory('${repository.path}${Platform.pathSeparator}source')
+        ..createSync();
+      output = Directory('${repository.path}${Platform.pathSeparator}output')
+        ..createSync();
+      final original = sourceFile(
+        'src/build/GhosttyLibVt.zig',
+        unpatchedGhosttyLibVt(),
+      );
+      final originalBytes = original.readAsBytesSync();
+
+      final staged = prepare();
+
+      expect(
+        File(
+          '${staged.path}${Platform.pathSeparator}src'
+          '${Platform.pathSeparator}build'
+          '${Platform.pathSeparator}GhosttyLibVt.zig',
+        ).readAsStringSync(),
+        contains('link_libc = true'),
+      );
       expect(original.readAsBytesSync(), originalBytes);
     });
 

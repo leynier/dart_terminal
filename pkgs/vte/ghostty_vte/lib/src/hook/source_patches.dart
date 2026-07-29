@@ -33,11 +33,18 @@ void applyPatchFile({
   PatchLogger? warn,
 }) {
   final normalized = _normalizedPatchFile(patchFile);
+  final environment = <String, String>{
+    ...Platform.environment,
+    // Hook outputs can live below the consuming repository. Prevent git apply
+    // from discovering that unrelated index and silently skipping every path.
+    'GIT_CEILING_DIRECTORIES': workingDirectory.parent.absolute.path,
+  };
   try {
     final alreadyApplied = Process.runSync(
       'git',
       <String>['apply', '--reverse', '--check', normalized.path],
       workingDirectory: workingDirectory.path,
+      environment: environment,
       runInShell: true,
     );
     if (alreadyApplied.exitCode == 0) {
@@ -51,6 +58,7 @@ void applyPatchFile({
       'git',
       <String>['apply', '--check', normalized.path],
       workingDirectory: workingDirectory.path,
+      environment: environment,
       runInShell: true,
     );
     if (check.exitCode != 0) {
@@ -65,6 +73,7 @@ void applyPatchFile({
       'git',
       <String>['apply', normalized.path],
       workingDirectory: workingDirectory.path,
+      environment: environment,
       runInShell: true,
     );
     if (apply.exitCode != 0) {
