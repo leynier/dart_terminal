@@ -1,7 +1,7 @@
 # ghostty_vte_flutter
 
 [![CI](https://github.com/leynier/dart_terminal/actions/workflows/vte.yml/badge.svg)](https://github.com/leynier/dart_terminal/actions/workflows/vte.yml)
-[![pub package](https://img.shields.io/pub/v/ghostty_vte_flutter.svg)](https://pub.dev/packages/ghostty_vte_flutter)
+[![upstream pub package](https://img.shields.io/pub/v/ghostty_vte_flutter.svg)](https://pub.dev/packages/ghostty_vte_flutter)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/leynier/dart_terminal/blob/master/pkgs/vte/ghostty_vte_flutter/LICENSE)
 
 Flutter terminal UI widgets powered by
@@ -35,9 +35,21 @@ single import.
 
 ## Installation
 
+The package names on pub.dev belong to the upstream project. For its published release:
+
 ```yaml
 dependencies:
-  ghostty_vte_flutter: ^0.1.5
+  ghostty_vte_flutter: ^0.1.3
+```
+
+This maintained fork is not published to pub.dev. Consumers of the fork must vendor the repository and override both workspace packages together:
+
+```yaml
+dependency_overrides:
+  ghostty_vte:
+    path: third_party/dart_terminal/pkgs/vte/ghostty_vte
+  ghostty_vte_flutter:
+    path: third_party/dart_terminal/pkgs/vte/ghostty_vte_flutter
 ```
 
 No separate `ghostty_vte` dependency is needed — it's re-exported

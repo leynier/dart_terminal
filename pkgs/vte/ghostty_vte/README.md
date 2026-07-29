@@ -1,7 +1,7 @@
 # ghostty_vte
 
 [![CI](https://github.com/leynier/dart_terminal/actions/workflows/vte.yml/badge.svg)](https://github.com/leynier/dart_terminal/actions/workflows/vte.yml)
-[![pub package](https://img.shields.io/pub/v/ghostty_vte.svg)](https://pub.dev/packages/ghostty_vte)
+[![upstream pub package](https://img.shields.io/pub/v/ghostty_vte.svg)](https://pub.dev/packages/ghostty_vte)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/leynier/dart_terminal/blob/master/pkgs/vte/ghostty_vte/LICENSE)
 
 Dart FFI bindings for [Ghostty](https://github.com/ghostty-org/ghostty)'s
@@ -37,9 +37,19 @@ on the **web** via WebAssembly.
 
 ## Installation
 
+The package name on pub.dev belongs to the upstream project. For its published release:
+
 ```yaml
 dependencies:
-  ghostty_vte: ^0.1.5
+  ghostty_vte: ^0.1.3
+```
+
+This maintained fork is not published to pub.dev. To consume its GitHub releases, vendor the repository and use a path dependency:
+
+```yaml
+dependencies:
+  ghostty_vte:
+    path: third_party/dart_terminal/pkgs/vte/ghostty_vte
 ```
 
 The native library is compiled automatically by a

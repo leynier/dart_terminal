@@ -10,6 +10,10 @@ fixes are reviewed upstream.
 - Upstream: <https://github.com/kingwill101/dart_terminal>
 - Upstream pull request: <https://github.com/kingwill101/dart_terminal/pull/15>
 
+## Distribution boundary
+
+The `ghostty_vte` and `ghostty_vte_flutter` names on pub.dev belong to the upstream project. This fork does not publish those package names. Alera consumes both packages through path overrides into this submodule, while the fork's GitHub releases provide the matching verified native artifacts.
+
 ## Changes
 
 - Recognize Puro pub cache paths in the `ghostty_vte` build hook so local Puro
@@ -23,7 +27,4 @@ fixes are reviewed upstream.
 
 ## Why Alera carries this fork
 
-Alera vendors `ghostty_vte` through this submodule so terminal dependencies can
-remain reproducible while upstream fixes are pending or being released. The
-fork avoids downstream patch files and publishes verified prebuilts from its
-stable branch.
+Alera vendors `ghostty_vte` through this submodule so terminal dependencies can remain reproducible while upstream fixes are pending or being released. The fork avoids downstream patch files and publishes verified prebuilts through GitHub releases from its stable branch.

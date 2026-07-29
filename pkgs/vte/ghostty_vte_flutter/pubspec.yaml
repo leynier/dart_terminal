@@ -4,6 +4,7 @@ description: >-
   Provides GhosttyTerminalView, GhosttyTerminalController, and
   automatic wasm initialisation for web targets.
 version: 0.1.5
+publish_to: none
 
 repository: https://github.com/leynier/dart_terminal/tree/master/pkgs/vte/ghostty_vte_flutter
 homepage: https://github.com/leynier/dart_terminal
