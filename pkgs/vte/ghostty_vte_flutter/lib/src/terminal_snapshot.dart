@@ -1276,6 +1276,8 @@ final class _GhosttyTerminalSnapshotParser {
           _style = GhosttyTerminalStyle(hyperlink: _style.hyperlink);
           break;
         case GhosttySgrAttributeTag.GHOSTTY_SGR_ATTR_UNKNOWN:
+        // Width sentinel emitted by GHOSTTY_ENUM_TYPED, never a real tag.
+        case GhosttySgrAttributeTag.GHOSTTY_SGR_ATTR_MAX_VALUE:
           break;
       }
     }

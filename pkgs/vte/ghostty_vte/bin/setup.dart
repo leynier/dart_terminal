@@ -14,8 +14,6 @@ import 'package:ghostty_vte/src/hook/asset_hashes.dart';
 import 'package:ghostty_vte/src/hook/build_cache.dart';
 import 'package:ghostty_vte/src/hook/dynamic_library.dart';
 
-const _repo = 'kingwill101/dart_terminal';
-
 Future<void> main(List<String> args) async {
   var tag = releaseTag;
   String? platform;
@@ -91,7 +89,7 @@ Future<void> _downloadAndExtract(
     'download',
     tag,
     '--repo',
-    _repo,
+    prebuiltReleaseRepository,
     '--pattern',
     filename,
     '--dir',
@@ -105,7 +103,8 @@ Future<void> _downloadAndExtract(
     // Fall back to curl with the direct URL.
     final encodedTag = Uri.encodeComponent(tag);
     final url =
-        'https://github.com/$_repo/releases/download/$encodedTag/$filename';
+        'https://github.com/$prebuiltReleaseRepository/releases/download/'
+        '$encodedTag/$filename';
     stdout.writeln('  gh CLI unavailable, trying curl...');
 
     final curlResult = await Process.run('curl', [

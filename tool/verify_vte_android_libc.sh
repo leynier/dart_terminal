@@ -31,4 +31,11 @@ if ! grep -Fq 'Shared library: [libc.so]' <<<"$dynamic_section"; then
   exit 1
 fi
 
+dynamic_symbols="$(readelf --wide --dyn-syms "$LIB_PATH")"
+if grep -Eq '[[:space:]]UND[[:space:]]+__tls_get_addr(@|$)' <<<"$dynamic_symbols"; then
+  echo "::error::Android libghostty-vt.so requires __tls_get_addr, which is not portable across the supported Android architectures" >&2
+  exit 1
+fi
+
 echo "Verified: Android libghostty-vt.so links against libc.so"
+echo "Verified: Android libghostty-vt.so does not require __tls_get_addr"

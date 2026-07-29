@@ -7,9 +7,7 @@ import 'package:path/path.dart' as p;
 
 import 'package:ghostty_vte/src/hook/dynamic_library.dart';
 import 'package:ghostty_vte/src/hook/asset_hashes.dart';
-import 'package:ghostty_vte/src/hook/source_patches.dart';
-
-const _repo = 'kingwill101/dart_terminal';
+import 'package:ghostty_vte/src/hook/source_build_tree.dart';
 
 void _info(String message) => stdout.writeln(message);
 
@@ -103,15 +101,34 @@ void main(List<String> args) async {
 
 bool _shouldPreferSourceBuild(BuildInput input) {
   final override = Platform.environment['GHOSTTY_VTE_PREFER_SOURCE'];
-  if (override != null && override.isNotEmpty && override != '0') {
-    return true;
+  if (override != null && override.isNotEmpty) {
+    return _envFlagValue(override);
   }
 
-  final packagePath = Directory.fromUri(input.packageRoot).absolute.path;
-  return !isPubCachePackagePath(packagePath);
+  // A checkout outside the pub cache carries its own ghostty submodule, which
+  // may sit at a different revision than the one the pinned release was built
+  // from. Downloading that release would then link a library whose ABI does not
+  // match the generated bindings, which corrupts memory instead of failing to
+  // link, so such a checkout builds from its own source.
+  return shouldPreferSourceBuildForPackagePath(
+    Directory.fromUri(input.packageRoot).absolute.path,
+    hasGhosttySourceRoot: _canResolveGhosttySourceRoot(input),
+  );
+}
+
+bool shouldPreferSourceBuildForPackagePath(
+  String packagePath, {
+  required bool hasGhosttySourceRoot,
+}) {
+  if (isPubCachePackagePath(packagePath)) {
+    return false;
+  }
+
+  return hasGhosttySourceRoot;
 }
 
 bool isPubCachePackagePath(String packagePath) {
+  const cacheSegmentNames = <String>{'.pub-cache', 'pub_cache'};
   final segments = packagePath
       .replaceAll('\\', '/')
       .toLowerCase()
@@ -120,7 +137,7 @@ bool isPubCachePackagePath(String packagePath) {
       .toList();
 
   for (var i = 0; i < segments.length; i++) {
-    if (segments[i] == '.pub-cache') {
+    if (cacheSegmentNames.contains(segments[i])) {
       return true;
     }
     if (segments[i] == 'pub' &&
@@ -185,7 +202,7 @@ Future<File> _downloadPrebuilt(
   final tarball = assetInfo.tarball;
   final url = Uri.https(
     'github.com',
-    '/$_repo/releases/download/$releaseTag/$tarball',
+    '/$prebuiltReleaseRepository/releases/download/$releaseTag/$tarball',
   );
 
   final client = HttpClient()..findProxy = HttpClient.findProxyFromEnvironment;
@@ -405,10 +422,11 @@ Future<void> _buildFromSource(
   String dylibName,
   Uri bundledLibUri,
 ) async {
-  final ghosttyRoot = _resolveGhosttySourceRoot(input);
-  applyBundledGhosttyPatches(
+  final sourceRoot = _resolveGhosttySourceRoot(input);
+  final ghosttyRoot = prepareGhosttySourceBuildTree(
     packageRoot: Directory.fromUri(input.packageRoot),
-    ghosttyRoot: ghosttyRoot,
+    sourceRoot: sourceRoot,
+    outputDirectory: Directory.fromUri(input.outputDirectory),
     info: _info,
     warn: _warn,
   );
@@ -422,6 +440,20 @@ Future<void> _buildFromSource(
     input.outputDirectory.resolve('ghostty/$target/'),
   )..createSync(recursive: true);
 
+  // Zig resolves its cache from the environment, and the Dart hooks runner
+  // hands hooks a filtered one. On Windows that strips the app data variables
+  // Zig falls back to, so it aborts with AppDataDirUnavailable. Pointing both
+  // caches at the shared output directory removes the dependency on inherited
+  // environment and keeps them across builds.
+  // The two caches keep separate directories because they hold different
+  // things: the global one holds fetched packages, the local one build output.
+  final zigLocalCacheDir = Directory.fromUri(
+    input.outputDirectoryShared.resolve('zig-cache/local/'),
+  )..createSync(recursive: true);
+  final zigGlobalCacheDir = Directory.fromUri(
+    input.outputDirectoryShared.resolve('zig-cache/global/'),
+  )..createSync(recursive: true);
+
   final zigArgs = <String>[
     'build',
     '-Demit-lib-vt=true',
@@ -430,6 +462,10 @@ Future<void> _buildFromSource(
     '-Dsimd=false',
     '--prefix',
     prefixDir.path,
+    '--cache-dir',
+    zigLocalCacheDir.path,
+    '--global-cache-dir',
+    zigGlobalCacheDir.path,
     '--summary',
     'failures',
   ];
@@ -448,7 +484,7 @@ Future<void> _buildFromSource(
     );
   }
 
-  final builtLib = _resolveBuiltLibrary(prefixDir, dylibName);
+  final builtLib = resolveBuiltLibrary(prefixDir, dylibName);
   await File.fromUri(builtLib).copy(File.fromUri(bundledLibUri).path);
 }
 
@@ -529,6 +565,10 @@ bool _isGhosttyRoot(Directory dir) {
 bool _envFlag(String name) {
   final value = Platform.environment[name];
   if (value == null) return false;
+  return _envFlagValue(value);
+}
+
+bool _envFlagValue(String value) {
   switch (value.toLowerCase()) {
     case '1':
     case 'true':
@@ -537,6 +577,38 @@ bool _envFlag(String name) {
       return true;
   }
   return false;
+}
+
+bool _canResolveGhosttySourceRoot(BuildInput input) {
+  final envPath = Platform.environment['GHOSTTY_SRC'];
+  if (envPath != null &&
+      envPath.isNotEmpty &&
+      _isGhosttyRoot(Directory(envPath))) {
+    return true;
+  }
+
+  final submoduleDir = Directory.fromUri(
+    input.packageRoot.resolve('third_party/ghostty/'),
+  );
+  if (_isGhosttyRoot(submoduleDir)) {
+    return true;
+  }
+  if (_envFlag('GHOSTTY_SRC_AUTO_FETCH')) {
+    return true;
+  }
+
+  final packageRoot = Directory.fromUri(input.packageRoot);
+  var current = packageRoot.absolute;
+  while (true) {
+    if (_isGhosttyRoot(current)) {
+      return true;
+    }
+    final parent = current.parent;
+    if (parent.path == current.path) {
+      return false;
+    }
+    current = parent;
+  }
 }
 
 void _cloneGhosttySource(Directory targetDir) {
@@ -581,13 +653,13 @@ String zigTargetForBuildHook(OS os, Architecture arch, {IOSSdk? iOSSdk}) {
   if (os == OS.android) {
     switch (arch) {
       case Architecture.arm:
-        return 'arm-linux-androideabi';
+        return 'arm-linux-androideabi.21';
       case Architecture.arm64:
-        return 'aarch64-linux-android';
+        return 'aarch64-linux-android.21';
       case Architecture.x64:
-        return 'x86_64-linux-android';
+        return 'x86_64-linux-android.21';
       case Architecture.ia32:
-        return 'x86-linux-android';
+        return 'x86-linux-android.21';
       default:
         break;
     }
@@ -650,36 +722,57 @@ String zigTargetForBuildHook(OS os, Architecture arch, {IOSSdk? iOSSdk}) {
   );
 }
 
-Uri _resolveBuiltLibrary(Directory prefixDir, String dylibName) {
-  final direct = File.fromUri(prefixDir.uri.resolve('lib/$dylibName'));
-  if (direct.existsSync()) {
+Uri resolveBuiltLibrary(Directory prefixDir, String dylibName) {
+  // Zig installs a Windows DLL under bin/ and leaves only the import library in
+  // lib/, so searching lib/ alone finds a .lib that is not loadable. Unix
+  // targets keep their shared object in lib/, which stays first.
+  const searchSubdirectories = <String>['lib/', 'bin/'];
+
+  for (final subdirectory in searchSubdirectories) {
+    final direct = File.fromUri(
+      prefixDir.uri.resolve('$subdirectory$dylibName'),
+    );
+    if (direct.existsSync()) {
+      ensureDynamicLibraryFile(
+        direct,
+        canonicalName: dylibName,
+        sourceDescription: 'source build output',
+      );
+      return direct.uri;
+    }
+  }
+
+  final searched = <String>[];
+  for (final subdirectory in searchSubdirectories) {
+    final directory = Directory.fromUri(prefixDir.uri.resolve(subdirectory));
+    if (!directory.existsSync()) {
+      continue;
+    }
+    searched.add(directory.path);
+
+    final selected = selectDynamicLibraryEntity(
+      directory.listSync(),
+      canonicalName: dylibName,
+    );
+    if (selected == null) {
+      continue;
+    }
+    final file = File(selected.path);
     ensureDynamicLibraryFile(
-      direct,
+      file,
       canonicalName: dylibName,
       sourceDescription: 'source build output',
     );
-    return direct.uri;
+    return file.uri;
   }
 
-  final libDir = Directory.fromUri(prefixDir.uri.resolve('lib/'));
-  if (!libDir.existsSync()) {
-    throw StateError('Expected library directory: ${libDir.path}');
-  }
-
-  final selected = selectDynamicLibraryEntity(
-    libDir.listSync(),
-    canonicalName: dylibName,
-  );
-  if (selected == null) {
+  if (searched.isEmpty) {
     throw StateError(
-      'Could not find built ghostty-vt library in ${libDir.path}',
+      'Expected a library directory under ${prefixDir.path}, '
+      'searched: ${searchSubdirectories.join(', ')}',
     );
   }
-  final file = File(selected.path);
-  ensureDynamicLibraryFile(
-    file,
-    canonicalName: dylibName,
-    sourceDescription: 'source build output',
+  throw StateError(
+    'Could not find built ghostty-vt library in ${searched.join(', ')}',
   );
-  return file.uri;
 }

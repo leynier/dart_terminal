@@ -865,10 +865,9 @@ void _checkResult(int result, String operation) {
   }
 }
 
-const int _ghosttyTerminalOptionsSize = 8;
 const int _ghosttyFormatterScreenExtraSize = 12;
 const int _ghosttyFormatterTerminalExtraSize = 24;
-const int _ghosttyFormatterTerminalOptionsSize = 36;
+const int _ghosttyFormatterTerminalOptionsSize = 40;
 const int _ghosttyTerminalScrollViewportSize = 24;
 const int _ghosttyStringSize = 8;
 const int _ghosttyColorRgbSize = 3;
@@ -884,12 +883,14 @@ const int _ghosttyBuildInfoVersionString = 5;
 const int _ghosttyBuildInfoVersionMajor = 6;
 const int _ghosttyBuildInfoVersionMinor = 7;
 const int _ghosttyBuildInfoVersionPatch = 8;
-const int _ghosttyBuildInfoVersionBuild = 9;
+// 9 is VERSION_PRE, which this API does not expose.
+const int _ghosttyBuildInfoVersionBuild = 10;
 
 const int _ghosttyTerminalOptColorForeground = 11;
 const int _ghosttyTerminalOptColorBackground = 12;
 const int _ghosttyTerminalOptColorCursor = 13;
 const int _ghosttyTerminalOptColorPalette = 14;
+const int _ghosttyTerminalOptScrollbackMaxBytes = 27;
 
 const int _ghosttyTerminalDataColorForeground = 18;
 const int _ghosttyTerminalDataColorBackground = 19;
@@ -977,18 +978,6 @@ void _writeBoolByte(_GhosttyWasmRuntime rt, int ptr, int offset, bool value) {
   rt.writeU8(ptr + offset, value ? 1 : 0);
 }
 
-void _writeTerminalOptions(
-  _GhosttyWasmRuntime rt,
-  int ptr, {
-  required int cols,
-  required int rows,
-  required int maxScrollback,
-}) {
-  rt.writeU16(ptr, _checkPositiveUint16(cols, 'cols'));
-  rt.writeU16(ptr + 2, _checkPositiveUint16(rows, 'rows'));
-  rt.writeU32(ptr + 4, _checkNonNegative(maxScrollback, 'maxScrollback'));
-}
-
 void _writeFormatterTerminalOptions(
   _GhosttyWasmRuntime rt,
   int ptr,
@@ -1013,6 +1002,10 @@ void _writeFormatterTerminalOptions(
   _writeBoolByte(rt, ptr, 31, screen.protection);
   _writeBoolByte(rt, ptr, 32, screen.kittyKeyboard);
   _writeBoolByte(rt, ptr, 33, screen.charsets);
+  // Trailing `const GhosttySelection *selection`. NULL formats the whole
+  // screen, which is what this path wants; leaving it unwritten had libghostty
+  // read the pointer from past the end of the allocation.
+  rt.writeU32(ptr + 36, 0);
 }
 
 final class GhosttyModsMask {
@@ -1061,6 +1054,21 @@ final class GhosttyNamedColor {
   static const int brightMagenta = GHOSTTY_COLOR_NAMED_BRIGHT_MAGENTA;
   static const int brightCyan = GHOSTTY_COLOR_NAMED_BRIGHT_CYAN;
   static const int brightWhite = GHOSTTY_COLOR_NAMED_BRIGHT_WHITE;
+}
+
+/// One grapheme cluster measured by [GhosttyVt.measureGraphemeCluster].
+final class VtGraphemeCluster {
+  const VtGraphemeCluster({required this.codepointCount, required this.width});
+
+  /// Codepoints the terminal consumed to complete the cluster.
+  final int codepointCount;
+
+  /// Display width of the cluster in cells: 0, 1, or 2.
+  final int width;
+
+  @override
+  String toString() =>
+      'VtGraphemeCluster(codepointCount: $codepointCount, width: $width)';
 }
 
 final class VtRgbColor {
@@ -3100,28 +3108,38 @@ final class VtTerminal {
       _maxScrollback = _checkNonNegative(maxScrollback, 'maxScrollback'),
       _wasm = _requireTerminalRuntime('VtTerminal') {
     final out = _allocOpaqueOrThrow(_wasm, 'ghostty_wasm_alloc_opaque');
-    final optionsPtr = _allocU8ArrayOrThrow(
-      _wasm,
-      _ghosttyTerminalOptionsSize,
-      'ghostty_wasm_alloc_u8_array',
-    );
-    try {
-      _writeTerminalOptions(
-        _wasm,
-        optionsPtr,
-        cols: _cols,
-        rows: _rows,
-        maxScrollback: _maxScrollback,
+    final scrollbackPtr = _wasm.allocUsize();
+    if (scrollbackPtr == 0) {
+      _wasm.freeOpaque(out);
+      throw GhosttyVtError(
+        'ghostty_wasm_alloc_usize',
+        GhosttyResult.GHOSTTY_OUT_OF_MEMORY,
       );
+    }
+    try {
       final result = _wasm.callInt('ghostty_terminal_new', <Object>[
         0,
         out,
-        optionsPtr,
+        _cols,
+        _rows,
       ]);
       _checkResult(result, 'ghostty_terminal_new');
       _handle = _wasm.readPtr(out);
+
+      // Scrollback moved out of the constructor into a runtime option, and it
+      // is a byte budget rather than a line count. See the matching note in
+      // high_level.dart.
+      _wasm.writeU32(scrollbackPtr, _maxScrollback);
+      _checkResult(
+        _wasm.callInt('ghostty_terminal_set', <Object>[
+          _handle,
+          _ghosttyTerminalOptScrollbackMaxBytes,
+          scrollbackPtr,
+        ]),
+        'ghostty_terminal_set(SCROLLBACK_MAX_BYTES)',
+      );
     } finally {
-      _wasm.freeU8Array(optionsPtr, _ghosttyTerminalOptionsSize);
+      _wasm.freeUsize(scrollbackPtr);
       _wasm.freeOpaque(out);
     }
   }
@@ -3808,6 +3826,97 @@ final class GhosttyVt {
 
   static bool isPasteSafe(String text) {
     return isPasteSafeBytes(utf8.encode(text));
+  }
+
+  /// Returns the display width of [codepoint] in terminal cells: 0, 1, or 2.
+  ///
+  /// See the native implementation for the full semantics. Requires the wasm
+  /// runtime; there is no table to fall back to before initialization.
+  static int codepointWidth(int codepoint) {
+    final rt = _requireTerminalRuntime('ghostty_unicode_codepoint_width');
+    return rt.callInt('ghostty_unicode_codepoint_width', <Object>[codepoint]);
+  }
+
+  /// Measures the first grapheme cluster in [codepoints].
+  static VtGraphemeCluster measureGraphemeCluster(List<int> codepoints) {
+    if (codepoints.isEmpty) {
+      return const VtGraphemeCluster(codepointCount: 0, width: 0);
+    }
+    final rt = _requireTerminalRuntime('ghostty_unicode_grapheme_width');
+    final cpsPtr = _allocU8ArrayOrThrow(
+      rt,
+      codepoints.length * 4,
+      'ghostty_wasm_alloc_u8_array',
+    );
+    final widthPtr = rt.allocU8();
+    if (widthPtr == 0) {
+      rt.freeU8Array(cpsPtr, codepoints.length * 4);
+      throw GhosttyVtError(
+        'ghostty_wasm_alloc_u8',
+        GhosttyResult.GHOSTTY_OUT_OF_MEMORY,
+      );
+    }
+    try {
+      for (var i = 0; i < codepoints.length; i++) {
+        rt.writeU32(cpsPtr + (i * 4), codepoints[i]);
+      }
+      final consumed = rt.callInt('ghostty_unicode_grapheme_width', <Object>[
+        cpsPtr,
+        codepoints.length,
+        widthPtr,
+      ]);
+      return VtGraphemeCluster(
+        codepointCount: consumed,
+        width: rt.readU8(widthPtr),
+      );
+    } finally {
+      rt.freeU8(widthPtr);
+      rt.freeU8Array(cpsPtr, codepoints.length * 4);
+    }
+  }
+
+  /// Returns the total display width of [text] in terminal cells, segmenting
+  /// it into grapheme clusters the way the terminal does with mode 2027 on.
+  static int displayWidth(String text) {
+    final codepoints = text.runes.toList(growable: false);
+    if (codepoints.isEmpty) {
+      return 0;
+    }
+    final rt = _requireTerminalRuntime('ghostty_unicode_grapheme_width');
+    final byteLen = codepoints.length * 4;
+    final cpsPtr = _allocU8ArrayOrThrow(
+      rt,
+      byteLen,
+      'ghostty_wasm_alloc_u8_array',
+    );
+    final widthPtr = rt.allocU8();
+    if (widthPtr == 0) {
+      rt.freeU8Array(cpsPtr, byteLen);
+      throw GhosttyVtError(
+        'ghostty_wasm_alloc_u8',
+        GhosttyResult.GHOSTTY_OUT_OF_MEMORY,
+      );
+    }
+    try {
+      for (var i = 0; i < codepoints.length; i++) {
+        rt.writeU32(cpsPtr + (i * 4), codepoints[i]);
+      }
+      var total = 0;
+      var i = 0;
+      while (i < codepoints.length) {
+        final consumed = rt.callInt('ghostty_unicode_grapheme_width', <Object>[
+          cpsPtr + (i * 4),
+          codepoints.length - i,
+          widthPtr,
+        ]);
+        total += rt.readU8(widthPtr);
+        i += consumed;
+      }
+      return total;
+    } finally {
+      rt.freeU8(widthPtr);
+      rt.freeU8Array(cpsPtr, byteLen);
+    }
   }
 
   static bool isPasteSafeBytes(List<int> bytes) {

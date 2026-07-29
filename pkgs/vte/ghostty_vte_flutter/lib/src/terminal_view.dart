@@ -3364,6 +3364,11 @@ class _GhosttyTerminalPainter extends CustomPainter {
           .GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BAR:
       case GhosttyRenderStateCursorVisualStyle
           .GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_BLOCK:
+      // Width sentinel emitted by GHOSTTY_ENUM_TYPED, never a real style. It
+      // shares the default shape so an unexpected value still draws a cursor
+      // rather than making it vanish.
+      case GhosttyRenderStateCursorVisualStyle
+          .GHOSTTY_RENDER_STATE_CURSOR_VISUAL_STYLE_MAX_VALUE:
         if (shouldShowCursorFill) {
           canvas.drawRect(shapeRect, fillPaint);
         }
