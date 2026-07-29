@@ -9,8 +9,6 @@ import 'package:ghostty_vte/src/hook/dynamic_library.dart';
 import 'package:ghostty_vte/src/hook/asset_hashes.dart';
 import 'package:ghostty_vte/src/hook/source_build_tree.dart';
 
-const _repo = 'leynier/dart_terminal';
-
 void _info(String message) => stdout.writeln(message);
 
 void _warn(String message) => stdout.writeln('Warning: $message');
@@ -204,7 +202,7 @@ Future<File> _downloadPrebuilt(
   final tarball = assetInfo.tarball;
   final url = Uri.https(
     'github.com',
-    '/$_repo/releases/download/$releaseTag/$tarball',
+    '/$prebuiltReleaseRepository/releases/download/$releaseTag/$tarball',
   );
 
   final client = HttpClient()..findProxy = HttpClient.findProxyFromEnvironment;

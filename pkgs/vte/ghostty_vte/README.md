@@ -443,7 +443,7 @@ export GHOSTTY_SRC_AUTO_FETCH=1
 ## Prebuilt libraries
 
 Prebuilt binaries for every platform are attached to each
-[GitHub release](https://github.com/kingwill101/dart_terminal/releases).
+[GitHub release](https://github.com/leynier/dart_terminal/releases).
 
 The easiest way to get them is the built-in setup command:
 

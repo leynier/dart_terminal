@@ -5,6 +5,8 @@
 
 // dart format off
 
+const String prebuiltReleaseRepository = 'leynier/dart_terminal';
+
 /// The GitHub release tag from which prebuilt binaries are downloaded.
 const String releaseTag = 'ghostty_vte-v0.1.4';
 

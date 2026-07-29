@@ -720,7 +720,7 @@ library for your target. Just make sure **Zig** and the **Ghostty source**
 are available — see the
 [`ghostty_vte` README](https://pub.dev/packages/ghostty_vte) for details.
 
-Or download [prebuilt libraries](https://github.com/kingwill101/dart_terminal/releases)
+Or download [prebuilt libraries](https://github.com/leynier/dart_terminal/releases)
 to skip the Zig requirement entirely.
 
 ## Related packages
