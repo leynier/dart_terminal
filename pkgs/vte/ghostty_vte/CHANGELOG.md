@@ -4,6 +4,8 @@
 
 - Source builds now stage and patch an isolated Ghostty tree in the hook output
   directory, leaving the provided checkout unchanged.
+- Android builds now target API 21 so Zig uses compatible emulated TLS instead
+  of requiring the unavailable `__tls_get_addr` symbol on x64.
 - Fixed `ghostty_vte:setup` downloading prebuilts from a repository that does
   not contain the bundled release.
 - Added `GhosttyVt.codepointWidth`, `GhosttyVt.measureGraphemeCluster`, and
@@ -15,8 +17,7 @@
   and `selectionsEqual`, with `VtSelection` owning the native snapshot. Native
   only: the wasm path does not carry grid references, which this API is
   addressed by.
-- No new prebuilts: these symbols are already in the `ghostty_vte-v0.1.4`
-  binaries, which were built from the same Ghostty revision.
+- Rebuilt the native prebuilts for the 0.1.5 release.
 
 ## 0.1.4
 

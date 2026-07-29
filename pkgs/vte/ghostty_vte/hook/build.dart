@@ -653,13 +653,13 @@ String zigTargetForBuildHook(OS os, Architecture arch, {IOSSdk? iOSSdk}) {
   if (os == OS.android) {
     switch (arch) {
       case Architecture.arm:
-        return 'arm-linux-androideabi';
+        return 'arm-linux-androideabi.21';
       case Architecture.arm64:
-        return 'aarch64-linux-android';
+        return 'aarch64-linux-android.21';
       case Architecture.x64:
-        return 'x86_64-linux-android';
+        return 'x86_64-linux-android.21';
       case Architecture.ia32:
-        return 'x86-linux-android';
+        return 'x86-linux-android.21';
       default:
         break;
     }

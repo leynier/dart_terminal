@@ -51,15 +51,15 @@ jobs:
             artifact: ghostty-vt.dll
             os_label: windows-arm64
           - runner: ubuntu-latest
-            target: aarch64-linux-android
+            target: aarch64-linux-android.21
             artifact: libghostty-vt.so
             os_label: android-arm64
           - runner: ubuntu-latest
-            target: arm-linux-androideabi
+            target: arm-linux-androideabi.21
             artifact: libghostty-vt.so
             os_label: android-arm
           - runner: ubuntu-latest
-            target: x86_64-linux-android
+            target: x86_64-linux-android.21
             artifact: libghostty-vt.so
             os_label: android-x64
           - runner: macos-latest
