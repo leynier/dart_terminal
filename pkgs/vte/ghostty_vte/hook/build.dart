@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import 'package:ghostty_vte/src/hook/dynamic_library.dart';
 import 'package:ghostty_vte/src/hook/asset_hashes.dart';
+import 'package:ghostty_vte/src/hook/ghostty_source_environment.dart';
 import 'package:ghostty_vte/src/hook/source_build_tree.dart';
 
 void _info(String message) => stdout.writeln(message);
@@ -474,6 +475,7 @@ Future<void> _buildFromSource(
     'zig',
     zigArgs,
     workingDirectory: ghosttyRoot.path,
+    environment: ghosttySourceProcessEnvironment(ghosttyRoot),
     runInShell: true,
   );
   if (result.exitCode != 0) {

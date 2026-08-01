@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'ghostty_source_environment.dart';
+
 typedef PatchLogger = void Function(String message);
 
 const List<String> bundledGhosttyPatchPaths = <String>[
@@ -33,12 +35,9 @@ void applyPatchFile({
   PatchLogger? warn,
 }) {
   final normalized = _normalizedPatchFile(patchFile);
-  final environment = <String, String>{
-    ...Platform.environment,
-    // Hook outputs can live below the consuming repository. Prevent git apply
-    // from discovering that unrelated index and silently skipping every path.
-    'GIT_CEILING_DIRECTORIES': workingDirectory.parent.absolute.path,
-  };
+  // Hook outputs can live below the consuming repository. Prevent Git from
+  // discovering that unrelated index and silently skipping every path.
+  final environment = ghosttySourceProcessEnvironment(workingDirectory);
   try {
     final alreadyApplied = Process.runSync(
       'git',
